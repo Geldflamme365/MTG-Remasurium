@@ -2664,6 +2664,12 @@ async function applyLands() {
 
 const START_HAND = 7;
 
+// Feste Grösse einer Karte auf dem Spielfeld. .is-board ändert die Breite
+// aus .playtest-card (118px, Seitenverhältnis 63/88) nicht, deshalb ist
+// das hier keine Annahme, sondern übernommen aus styles.css.
+const BOARD_CARD_W = 118;
+const BOARD_CARD_H = Math.round((BOARD_CARD_W * 88) / 63);
+
 const playtest = {
   library: [],
   hand: [],
@@ -2771,12 +2777,20 @@ function renderPlaytest() {
   for (const alt of els.playtestBoard.querySelectorAll(".playtest-card.is-board")) {
     alt.remove();
   }
+  // Position kommt als Anteil (0 bis 1) der freien Fläche, nicht als
+  // fester Pixelwert. So bleibt jede Karte innerhalb des Bretts, auch
+  // wenn es seit dem Ablegen schmaler geworden ist.
+  const brettMasse = els.playtestBoard.getBoundingClientRect();
+  const nutzbarB = Math.max(0, brettMasse.width - BOARD_CARD_W);
+  const nutzbarH = Math.max(0, brettMasse.height - BOARD_CARD_H);
   for (const stueck of playtest.board) {
+    const left = Math.round((stueck.xAnteil ?? 0) * nutzbarB);
+    const top = Math.round((stueck.yAnteil ?? 0) * nutzbarH);
     els.playtestBoard.insertAdjacentHTML(
       "beforeend",
       `<div class="playtest-card is-board${stueck.tapped ? " is-tapped" : ""}" data-uid="${escapeHtml(
         stueck.uid
-      )}" style="left: ${stueck.x}px; top: ${stueck.y}px" title="${escapeHtml(stueck.name)}">
+      )}" style="left: ${left}px; top: ${top}px" title="${escapeHtml(stueck.name)}">
         ${
           stueck.image
             ? `<img src="${escapeHtml(stueck.image)}" alt="${escapeHtml(stueck.name)}" draggable="false" />`
@@ -2815,7 +2829,27 @@ function playtestEntnehmen(uid) {
 // entscheidet die Stelle darunter, wohin die Karte kommt.
 let zug = null;
 
+// Nimmt einen laufenden Zug vorzeitig zurück: Schatten weg, Zustand weg.
+// Wird gebraucht, wenn das Fenster mitten im Ziehen schliesst - sonst
+// bliebe der Schatten für immer frei schwebend auf der Seite stehen,
+// weil dann nie ein pointerup mehr kommt.
+function playtestZugAbbrechen() {
+  zug?.schatten?.remove();
+  zug = null;
+}
+
 function playtestZeigerStart(event) {
+  // Ein zweiter Finger darf einen laufenden Zug nicht übernehmen, sonst
+  // verliert der erste seine Zuordnung und sein Schatten bleibt hängen.
+  if (zug) {
+    return;
+  }
+  // Nur die primäre Maustaste zieht; rechte oder mittlere Klicks sollen
+  // ihre eigene Funktion behalten (Kontextmenü, Auto-Scroll).
+  if (event.pointerType === "mouse" && event.button !== 0) {
+    return;
+  }
+
   const karte = event.target.closest(".playtest-card");
   if (!karte || !els.playtestModal.contains(karte)) {
     return;
@@ -2823,6 +2857,7 @@ function playtestZeigerStart(event) {
 
   const rect = karte.getBoundingClientRect();
   zug = {
+    pointerId: event.pointerId,
     uid: karte.dataset.uid || null,
     ausBibliothek: karte.dataset.draw === "1",
     startX: event.clientX,
@@ -2844,7 +2879,7 @@ function playtestZeigerStart(event) {
 }
 
 function playtestZeigerBewegung(event) {
-  if (!zug) return;
+  if (!zug || event.pointerId !== zug.pointerId) return;
   const weit = Math.abs(event.clientX - zug.startX) + Math.abs(event.clientY - zug.startY);
   if (!zug.bewegt && weit < 6) {
     return;
@@ -2861,7 +2896,7 @@ function playtestZeigerBewegung(event) {
 }
 
 function playtestZeigerEnde(event) {
-  if (!zug) return;
+  if (!zug || event.pointerId !== zug.pointerId) return;
   const { uid, ausBibliothek, bewegt, schatten, griffX, griffY } = zug;
   zug = null;
   schatten?.remove();
@@ -2898,8 +2933,15 @@ function playtestZeigerEnde(event) {
     return;
   }
 
-  stueck.x = Math.round(event.clientX - brett.left - griffX);
-  stueck.y = Math.round(event.clientY - brett.top - griffY);
+  // Anteil an der freien Fläche statt fester Pixel, geklemmt auf 0..1:
+  // Der Ablageort bleibt so immer innerhalb des Bretts, auch wenn beim
+  // Anfassen weit aussen am Kartenrand gegriffen wurde.
+  const nutzbarB = Math.max(0, brett.width - BOARD_CARD_W);
+  const nutzbarH = Math.max(0, brett.height - BOARD_CARD_H);
+  const rohX = event.clientX - brett.left - griffX;
+  const rohY = event.clientY - brett.top - griffY;
+  stueck.xAnteil = nutzbarB > 0 ? Math.min(1, Math.max(0, rohX / nutzbarB)) : 0;
+  stueck.yAnteil = nutzbarH > 0 ? Math.min(1, Math.max(0, rohY / nutzbarH)) : 0;
   stueck.tapped = stueck.tapped || false;
   playtest.board.push(stueck);
   renderPlaytest();
@@ -2916,9 +2958,19 @@ function openPlaytest() {
 }
 
 function closePlaytest() {
+  playtestZugAbbrechen();
   playtest.laeuft = false;
   closeModal(els.playtestModal);
 }
+
+// Das Brett kann sich unter laufenden Karten verändern: Fenstergrösse,
+// Bildschirmdrehung, die schmale Ansicht auf dem Handy. Die Positionen
+// stecken als Anteil, nicht als Pixel, ein Neuzeichnen reicht deshalb.
+new ResizeObserver(() => {
+  if (playtest.laeuft) {
+    renderPlaytest();
+  }
+}).observe(els.playtestBoard);
 
 // --- Statistik ------------------------------------------------------------
 
@@ -3956,9 +4008,10 @@ els.playtestResetBtn.addEventListener("click", playtestNeu);
 els.playtestModal.addEventListener("pointerdown", playtestZeigerStart);
 window.addEventListener("pointermove", playtestZeigerBewegung);
 window.addEventListener("pointerup", playtestZeigerEnde);
-window.addEventListener("pointercancel", () => {
-  zug?.schatten?.remove();
-  zug = null;
+window.addEventListener("pointercancel", (event) => {
+  if (zug && event.pointerId === zug.pointerId) {
+    playtestZugAbbrechen();
+  }
 });
 
 // Tastenkürzel gelten nur, solange der Playtester offen ist und man nicht

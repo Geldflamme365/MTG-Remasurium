@@ -66,18 +66,34 @@ function publicUser(row) {
   };
 }
 
+// In image steht sonst eine Adresse bei Scryfall, die ein paar Dutzend
+// Zeichen misst. Eine eigene Karte trägt dort ihr Bild selbst, als
+// Data-URL. Der Browser verkleinert es vorher und hält sich dabei an eine
+// Obergrenze von 300 KiB; diese Grenze liegt darüber, damit nicht ein
+// abgeschnittener Rumpf ankommt, den kein Browser zeichnen kann.
+const MAX_IMAGE_LENGTH = 400_000;
+
+function bildFeld(value) {
+  return value ? String(value).slice(0, MAX_IMAGE_LENGTH) : null;
+}
+
 function cardFromInput(input) {
   const cardId = String(input?.id || "").trim();
   const name = String(input?.name || "").trim();
   if (!cardId || !name) {
     return null;
   }
+
   return {
-    id: cardId.slice(0, 64),
+    // Kennungen von Scryfall sind 36 Zeichen lang. Eigene Karten tragen
+    // Typ und Farben in ihrer Kennung und kommen damit auf gut 60; der
+    // Rest ist Luft, damit eine längere Angabe die Kennung nicht
+    // abschneidet und die Karte unauffindbar macht.
+    id: cardId.slice(0, 128),
     name: name.slice(0, 300),
     set_name: input.set_name ? String(input.set_name).slice(0, 200) : null,
     released_at: input.released_at ? String(input.released_at).slice(0, 20) : null,
-    image: input.image ? String(input.image).slice(0, 500) : null,
+    image: bildFeld(input.image),
     // Wird beim Versionswechsel mitgeschickt, damit die Karte in der
     // Collection an ihrer Stelle bleibt statt nach vorne zu springen.
     added_at: input.added_at ? String(input.added_at).slice(0, 40) : null
@@ -621,7 +637,7 @@ async function handleUpdateDeck(request, env, user, deckId) {
         "commander_image = ?",
         "commander_art = ?"
       );
-      values.push(card.id, card.name, card.image, body.commander.art ? String(body.commander.art).slice(0, 500) : null);
+      values.push(card.id, card.name, card.image, bildFeld(body.commander.art));
       // Der Commander gehört nicht zusätzlich in die Kartenliste.
       await env.DB.prepare("DELETE FROM deck_cards WHERE deck_id = ? AND card_id = ?")
         .bind(deckId, card.id)
@@ -840,7 +856,7 @@ async function handleMergeDecks(request, env, user) {
         commander?.id || null,
         commander?.name || null,
         commander?.image || null,
-        raw?.commander?.art ? String(raw.commander.art).slice(0, 500) : null,
+        bildFeld(raw?.commander?.art),
         stamp,
         stamp
       )

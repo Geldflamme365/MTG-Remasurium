@@ -189,6 +189,7 @@
             <div class="button-row">
               <a class="button-link primary" href="#/suche">Mehr Karten suchen</a>
               <button type="button" class="retro-button" data-random-card="1">Random Card</button>
+              <button id="openCustomCollectionBtn" type="button" class="retro-button">Eigene Karte</button>
             </div>
           </div>
         </article>
@@ -281,6 +282,7 @@
                 <button id="openExportBtn" type="button" class="retro-button">Deck exportieren</button>
                 <button id="deleteDeckBtn" type="button" class="retro-button">Deck löschen</button>
                 <button id="legalityBadge" type="button" class="legality-badge" title="Regelprüfung anzeigen">wird geprüft</button>
+                <button id="openCustomDeckBtn" type="button" class="retro-button">Eigene Karte</button>
                 <button id="openLandsBtn" type="button" class="retro-button">Länder optimieren</button>
                 <button id="openPlaytestBtn" type="button" class="retro-button">&#9654; Playtest (Beta)</button>
               </div>
@@ -611,6 +613,40 @@
           Die Verteilung folgt den farbigen Manasymbolen im Deck. Ein Symbol wie
           {W/U} zählt für beide Farben je zur Hälfte. Die Zahlen lassen sich von
           Hand überschreiben, gesetzt wird immer das, was in den Feldern steht.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div id="customCardModal" class="modal" aria-hidden="true">
+    <div class="modal-dialog window modal-narrow" role="dialog" aria-modal="true" aria-label="Eigene Karte">
+      <div class="title-bar">
+        <span>eigene karte</span>
+        <button id="customCardCloseBtn" class="modal-close" type="button" aria-label="Schließen">X</button>
+      </div>
+      <div class="modal-body">
+        <label class="field-label" for="customCardName">Name der Karte</label>
+        <input id="customCardName" type="text" maxlength="80" placeholder="z.B. Mein Proxy" autocomplete="off" />
+
+        <label class="field-label spaced" for="customCardFile">Bild</label>
+        <input id="customCardFile" type="file" accept="image/*" />
+
+        <div id="customCardPreview" class="custom-card-preview"></div>
+
+        <div class="status-wrap">
+          <span class="field-label">Status</span>
+          <div id="customCardStatus" class="status muted">Wähle ein Bild aus.</div>
+        </div>
+
+        <div class="button-row">
+          <button id="customCardSaveBtn" type="button" class="retro-button">Karte anlegen</button>
+        </div>
+
+        <p class="small-note">
+          Eine eigene Karte ist ein Bild mit einem Namen. Oracle-Text, Preis und
+          andere Ausgaben gibt es dazu nicht, und die Regelprüfung lässt sie in
+          Ruhe. Das Bild wird im Browser auf Kartengrösse verkleinert und bleibt
+          bei der Karte gespeichert.
         </p>
       </div>
     </div>

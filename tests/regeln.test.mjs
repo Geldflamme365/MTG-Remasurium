@@ -115,3 +115,34 @@ test("Farbe zu Standardland", () => {
   assert.equal(landZuFarbe("B").name, "Swamp");
   assert.equal(landZuFarbe("C").name, "Wastes");
 });
+
+// Eine eigene Karte bekommt in script.js einen Eintrag von Hand: leere
+// Typzeile, leere Manakosten, farblose Identität, kein Manawert. Diese
+// Prüfungen halten fest, was daraus folgen soll, denn genau darauf
+// verlässt sich die Oberfläche, statt überall einen Sonderfall zu führen.
+test("Eigene Karte: leere Typzeile landet unter Sonstige", () => {
+  assert.equal(typKategorie(""), "Sonstige");
+});
+
+test("Eigene Karte: ohne Manakosten gibt es keine Farbsymbole", () => {
+  assert.deepEqual(zaehlePips(""), { W: 0, U: 0, B: 0, R: 0, G: 0 });
+});
+
+test("Eigene Karte: farblos passt in jede Farbidentität", () => {
+  assert.equal(passtInFarbidentitaet([], ["B", "G"]), true);
+  assert.equal(passtInFarbidentitaet([], []), true);
+});
+
+test("Eigene Karte: ohne Manawert bleibt sie aus der Kurve heraus", () => {
+  const kurve = manaKurve([
+    { manaValue: 2, quantity: 3, istLand: false },
+    { manaValue: null, quantity: 5, istLand: false }
+  ]);
+  assert.equal(kurve.anzahl, 3, "nur die Karte mit Manawert zählt");
+  assert.equal(kurve.schnitt, 2);
+  assert.equal(
+    kurve.balken.reduce((a, b) => a + b, 0),
+    3,
+    "die eigene Karte taucht in keinem Balken auf"
+  );
+});

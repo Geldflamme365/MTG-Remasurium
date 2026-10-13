@@ -159,6 +159,15 @@ const els = {
   landsSplit: document.getElementById("landsSplit"),
   landsStatus: document.getElementById("landsStatus"),
   landsApplyBtn: document.getElementById("landsApplyBtn"),
+  openCustomCollectionBtn: document.getElementById("openCustomCollectionBtn"),
+  openCustomDeckBtn: document.getElementById("openCustomDeckBtn"),
+  customCardModal: document.getElementById("customCardModal"),
+  customCardCloseBtn: document.getElementById("customCardCloseBtn"),
+  customCardName: document.getElementById("customCardName"),
+  customCardFile: document.getElementById("customCardFile"),
+  customCardPreview: document.getElementById("customCardPreview"),
+  customCardStatus: document.getElementById("customCardStatus"),
+  customCardSaveBtn: document.getElementById("customCardSaveBtn"),
   legalityModal: document.getElementById("legalityModal"),
   legalityModalCloseBtn: document.getElementById("legalityModalCloseBtn"),
   legalitySummary: document.getElementById("legalitySummary"),
@@ -853,6 +862,13 @@ function renderCollection() {
   for (const entry of els.collection.querySelectorAll("button[data-pick]")) {
     entry.addEventListener("click", async () => {
       const id = entry.dataset.pick;
+      // Eine eigene Karte steht vollständig in der Collection, da gibt es
+      // nichts nachzuladen.
+      const eigene = state.collection.find((item) => item.id === id);
+      if (istEigeneKarte(id) && eigene) {
+        await selectCollectionCard(eigeneKarteAus(eigene));
+        return;
+      }
       try {
         setStatus("Lade Karte aus Collection...", "muted");
         const card = await fetchJson(`https://api.scryfall.com/cards/${id}`);
@@ -944,6 +960,10 @@ function createDetailsHtml(card, prints, context) {
     deck: state.deckFaceIndex
   };
   const activeFaceIndex = faceIndexes[context] ?? 0;
+  // Eine eigene Karte hat weder Oracle-Text noch Set, Rarität oder
+  // andere Ausgaben. Diese Abschnitte entfallen für sie ganz, statt
+  // mit Fragezeichen gefüllt zu werden.
+  const eigene = istEigeneKarte(card.id);
   const inDeck = state.activeDeckCards.some((entry) => entry.id === card.id);
   const hasFaces = Array.isArray(card.card_faces) && card.card_faces.length > 1;
   const safeFaceIndex = hasFaces ? Math.max(0, Math.min(activeFaceIndex, card.card_faces.length - 1)) : 0;
@@ -955,7 +975,7 @@ function createDetailsHtml(card, prints, context) {
     card.card_faces?.map((entry) => entry.oracle_text || "").filter(Boolean).join("\n\n") ||
     "Kein Oracle Text vorhanden.";
   const cardName = face?.name || card.name;
-  const typeLine = face?.type_line || card.type_line || "Unbekannter Typ";
+  const typeLine = face?.type_line || card.type_line || (eigene ? t(EIGENE_SET) : "Unbekannter Typ");
   const canFlip =
     hasFaces &&
     card.card_faces.every((entry) => Boolean(entry.image_uris?.normal || entry.image_uris?.large || entry.image_uris?.small));
@@ -989,18 +1009,28 @@ function createDetailsHtml(card, prints, context) {
           <h3>${escapeHtml(cardName)}</h3>
           <p class="small-note">${escapeHtml(typeLine)}</p>
           <div class="pill-row details-pills">
-            <span class="pill">Set: ${escapeHtml(card.set_name || "?")}</span>
-            <span class="pill">Release: ${escapeHtml(card.released_at || "?")}</span>
-            <span class="pill">Rarity: ${escapeHtml(card.rarity || "?")}</span>
+            ${
+              eigene
+                ? `<span class="pill">${escapeHtml(t(EIGENE_SET))}</span>`
+                : `<span class="pill">Set: ${escapeHtml(card.set_name || "?")}</span>
+                   <span class="pill">Release: ${escapeHtml(card.released_at || "?")}</span>
+                   <span class="pill">Rarity: ${escapeHtml(card.rarity || "?")}</span>`
+            }
           </div>
         </div>
 
-        <div class="analysis">
-          <h3>Oracle Text</h3>
-          <div class="raw">${escapeHtml(oracleText)}</div>
-        </div>
+        ${
+          eigene
+            ? `<p class="small-note">${escapeHtml(
+                t("Selbst angelegt, darum ohne Oracle-Text, Preis und weitere Ausgaben.")
+              )}</p>`
+            : `<div class="analysis">
+                 <h3>Oracle Text</h3>
+                 <div class="raw">${escapeHtml(oracleText)}</div>
+               </div>
 
-        ${renderVersionSection(prints)}
+               ${renderVersionSection(prints)}`
+        }
       </div>
     </div>
   `;
@@ -1518,7 +1548,7 @@ function deckCardFromScryfall(card) {
     name: card.name,
     set_name: card.set_name ?? null,
     image: getCardPreviewUrl(card) || card.image || null,
-    unlimited: allowsAnyNumber(card)
+    unlimited: istEigeneKarte(card.id) || allowsAnyNumber(card)
   };
 }
 
@@ -1756,12 +1786,19 @@ async function demoteCommander() {
     image: commander.image ?? null,
     unlimited: false
   };
-  try {
-    entry = deckCardFromScryfall(
-      await fetchJson(`https://api.scryfall.com/cards/${encodeURIComponent(commander.id)}`)
-    );
-  } catch {
-    // Rückfall auf die gespeicherten Angaben.
+  if (istEigeneKarte(commander.id)) {
+    // Zu einer eigenen Karte gibt es nichts nachzuschlagen. Ohne diesen
+    // Zweig liefe die Abfrage ins Leere und der Rückfall oben würde ihr
+    // Set und ihr Recht auf mehrere Exemplare wegnehmen.
+    entry = deckCardFromScryfall(eigeneKarteAus(commander));
+  } else {
+    try {
+      entry = deckCardFromScryfall(
+        await fetchJson(`https://api.scryfall.com/cards/${encodeURIComponent(commander.id)}`)
+      );
+    } catch {
+      // Rückfall auf die gespeicherten Angaben.
+    }
   }
 
   try {
@@ -1793,6 +1830,11 @@ async function removeCommanderCard() {
 
 async function openCommanderVersionPicker(commander) {
   if (!commander) {
+    return;
+  }
+
+  if (istEigeneKarte(commander.id)) {
+    setDeckStatus(t("Zu einer eigenen Karte gibt es keine anderen Ausgaben."), "muted");
     return;
   }
 
@@ -1878,8 +1920,13 @@ function renderDeckCards() {
     <button type="button" data-remove="${escapeHtml(card.id)}" title="Aus dem Deck entfernen" aria-label="Entfernen">X</button>
   `;
 
+  // Zu einer eigenen Karte gibt es keine zweite Ausgabe, der Klick führt
+  // dort nur in die Detailansicht.
+  const bildTitel = (card) =>
+    istEigeneKarte(card.id) ? `${card.name} ansehen` : `Version von ${card.name} wechseln`;
+
   const bild = (card) => `
-    <button type="button" class="deck-card-thumb" data-version="${escapeHtml(card.id)}" title="Version von ${escapeHtml(card.name)} wechseln" aria-label="Version von ${escapeHtml(card.name)} wechseln">
+    <button type="button" class="deck-card-thumb" data-version="${escapeHtml(card.id)}" title="${escapeHtml(bildTitel(card))}" aria-label="${escapeHtml(bildTitel(card))}">
       ${
         card.image
           ? `<img src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
@@ -1981,6 +2028,10 @@ function renderDeckCards() {
       if (!card) {
         return;
       }
+      if (istEigeneKarte(card.id)) {
+        await selectDeckSearchCard(eigeneKarteAus(card));
+        return;
+      }
       setDeckStatus(`Lade ${card.name}...`, "muted");
       try {
         await selectDeckSearchCard(
@@ -2015,6 +2066,13 @@ async function applyDeckVersion(print) {
 }
 
 async function setCommanderFromDeckCard(card) {
+  // Eine eigene Karte hat nur das eine Bild, einen eigenen Ausschnitt
+  // fürs Artwork gibt es nicht.
+  if (istEigeneKarte(card.id)) {
+    await setCommander({ ...card, art: card.image ?? null });
+    return;
+  }
+
   // Für das Artwork in der Übersicht wird die vollständige Karte
   // gebraucht, die Deckzeile kennt nur das normale Bild.
   try {
@@ -2077,6 +2135,14 @@ async function updateDeckQueries() {
   if (!commander) {
     state.commanderCard = null;
     renderDeckQueries(DEFAULT_DECK_QUERIES, "Klick auf eine Karte öffnet ihre Details. Mit einem Commander passen sich die Vorschläge an.");
+    return;
+  }
+
+  // Eine eigene Karte hat keine Farbidentität, auf die sich Vorschläge
+  // zuschneiden liessen. Sie bekommt deshalb die allgemeinen.
+  if (istEigeneKarte(commander.id)) {
+    state.commanderCard = null;
+    renderDeckQueries(DEFAULT_DECK_QUERIES, "Klick auf eine Karte öffnet ihre Details.");
     return;
   }
 
@@ -2298,10 +2364,18 @@ ladeCardInfo();
 
 async function ensureLegality(ids) {
   await ensureKurs();
+  // Eigene Karten kennt Scryfall nicht. Ihr Eintrag entsteht hier, damit
+  // sie gar nicht erst in die Abfrage geraten.
+  const bekannte = [...new Set(ids)].filter(Boolean);
+  for (const id of bekannte) {
+    if (istEigeneKarte(id)) {
+      merkeEigeneKarteInfo(id);
+    }
+  }
   // Nachgefragt wird für unbekannte Karten und für alle, deren Preis
   // älter als einen Tag ist. Die übrigen Angaben stehen dann schon.
-  const fehlende = [...new Set(ids)].filter(
-    (id) => id && (!cardInfoCache.has(id) || preisVeraltet(id))
+  const fehlende = bekannte.filter(
+    (id) => !istEigeneKarte(id) && (!cardInfoCache.has(id) || preisVeraltet(id))
   );
   if (!fehlende.length) {
     return;
@@ -2464,6 +2538,178 @@ async function checkDeckLegality() {
     // Ohne Scryfall bleiben Grösse und Mengen geprüft, verbotene Karten
     // lassen sich dann nicht beurteilen.
   }
+}
+
+// --- Eigene Karten --------------------------------------------------------
+//
+// Eine eigene Karte ist ein Bild mit einem Namen, sonst nichts. Nach aussen
+// sieht sie aus wie eine Karte von Scryfall, trägt aber eine Kennung mit
+// festem Vorsatz. Daran erkennt jede Stelle im Programm, dass es zu ihr
+// nichts nachzuschlagen gibt: keine anderen Ausgaben, kein Preis, keine
+// Regelauskunft.
+//
+// Das Bild wird im Browser verkleinert und als Data-URL in genau dem Feld
+// abgelegt, in dem sonst die Bildadresse von Scryfall steht. Deshalb
+// braucht es dafür weder eine neue Tabelle noch einen neuen Endpunkt, und
+// die Karte wandert mit demselben Weg in die Cloud wie jede andere.
+
+const EIGENE_VORSATZ = "custom-";
+const EIGENE_SET = "Eigene Karte";
+// Dieselbe Breite, die Scryfall als "normal" ausliefert. Mehr braucht die
+// Detailansicht nicht, und jedes Pixel darüber liegt dauerhaft im Speicher.
+const EIGENE_BILD_BREITE = 488;
+// Obergrenze für die fertige Data-URL, also für das, was gespeichert wird.
+// Wird sie überschritten, sinkt die Qualität stufenweise.
+const EIGENE_BILD_GRENZE = 300 * 1024;
+
+function istEigeneKarte(id) {
+  return String(id || "").startsWith(EIGENE_VORSATZ);
+}
+
+// Bringt eine eigene Karte in die Form, die der Rest des Programms von
+// Scryfall gewohnt ist. image_uris ist der Grund dafür: daran kommen
+// Kachel, Detailansicht und Deckzeile ohne Sonderfall heran.
+function eigeneKarteAus(eintrag) {
+  const bild = eintrag.image || null;
+  return {
+    ...eintrag,
+    set_name: eintrag.set_name || EIGENE_SET,
+    released_at: eintrag.released_at ?? null,
+    type_line: "",
+    oracle_text: "",
+    image: bild,
+    image_uris: bild ? { small: bild, normal: bild, large: bild, art_crop: bild } : undefined,
+    // Wie viele Exemplare erlaubt sind, weiss nur, wer die Karte gemacht
+    // hat. Das Programm steht dem nicht im Weg.
+    unlimited: true,
+    custom: true
+  };
+}
+
+function eigeneKarte(name, bild) {
+  return eigeneKarteAus({ id: `${EIGENE_VORSATZ}${crypto.randomUUID()}`, name, image: bild });
+}
+
+// Eigene Karten bekommen ihren Eintrag im Kartenspeicher von Hand:
+// farblos, ohne Typ, ohne Manakosten. Damit fallen sie von selbst aus
+// Manakurve, Farbanteil und Preissumme heraus, ohne dass diese Stellen
+// einen Sonderfall brauchen, und sie sprengen nie die Farbidentität des
+// Commanders.
+function merkeEigeneKarteInfo(id) {
+  if (cardInfoCache.has(id)) {
+    return;
+  }
+  cardInfoCache.set(id, {
+    legality: "unknown",
+    typeLine: "",
+    colorIdentity: [],
+    manaCost: "",
+    cmc: null,
+    price: null,
+    pt: Date.now(),
+    t: Date.now()
+  });
+}
+
+// Verkleinert ein hochgeladenes Bild auf Kartengrösse und gibt es als
+// Data-URL zurück.
+async function bildAlsDatenUrl(datei) {
+  const bitmap = await createImageBitmap(datei);
+  const faktor = Math.min(1, EIGENE_BILD_BREITE / bitmap.width);
+  const breite = Math.max(1, Math.round(bitmap.width * faktor));
+  const hoehe = Math.max(1, Math.round(bitmap.height * faktor));
+
+  const flaeche = document.createElement("canvas");
+  flaeche.width = breite;
+  flaeche.height = hoehe;
+  const stift = flaeche.getContext("2d");
+  // JPEG kennt keine Transparenz. Ohne weissen Grund würden durchsichtige
+  // Stellen eines PNG schwarz werden.
+  stift.fillStyle = "#ffffff";
+  stift.fillRect(0, 0, breite, hoehe);
+  stift.drawImage(bitmap, 0, 0, breite, hoehe);
+  bitmap.close?.();
+
+  for (const guete of [0.85, 0.7, 0.55, 0.4]) {
+    const url = flaeche.toDataURL("image/jpeg", guete);
+    if (url.length <= EIGENE_BILD_GRENZE) {
+      return url;
+    }
+  }
+  return flaeche.toDataURL("image/jpeg", 0.3);
+}
+
+// Das Bild liegt hier schon fertig verkleinert, damit das Anlegen danach
+// ohne Wartezeit geht.
+const eigeneKarteEntwurf = { bild: null, ziel: "collection" };
+
+function setEigeneKarteStatus(text, art = "muted") {
+  schreibeStatus(els.customCardStatus, text, art);
+}
+
+function renderEigeneKarteVorschau() {
+  els.customCardPreview.innerHTML = eigeneKarteEntwurf.bild
+    ? `<img src="${escapeHtml(eigeneKarteEntwurf.bild)}" alt="${escapeHtml(t("Vorschau"))}" />`
+    : `<span class="small-note">${escapeHtml(t("Noch kein Bild gewählt."))}</span>`;
+}
+
+function openEigeneKarteModal(ziel) {
+  eigeneKarteEntwurf.ziel = ziel;
+  eigeneKarteEntwurf.bild = null;
+  els.customCardName.value = "";
+  els.customCardFile.value = "";
+  renderEigeneKarteVorschau();
+  setEigeneKarteStatus(t("Wähle ein Bild aus."));
+  openModal(els.customCardModal);
+  els.customCardName.focus();
+}
+
+async function eigeneKarteBildGewaehlt() {
+  const datei = els.customCardFile.files?.[0];
+  if (!datei) {
+    eigeneKarteEntwurf.bild = null;
+    renderEigeneKarteVorschau();
+    setEigeneKarteStatus(t("Wähle ein Bild aus."));
+    return;
+  }
+
+  setEigeneKarteStatus(t("Bild wird verkleinert..."));
+  try {
+    eigeneKarteEntwurf.bild = await bildAlsDatenUrl(datei);
+    renderEigeneKarteVorschau();
+    setEigeneKarteStatus(
+      t("Bild bereit, {size} kB.", { size: Math.round(eigeneKarteEntwurf.bild.length / 1024) }),
+      "ok"
+    );
+  } catch (error) {
+    eigeneKarteEntwurf.bild = null;
+    renderEigeneKarteVorschau();
+    setEigeneKarteStatus(
+      t("Das Bild konnte nicht gelesen werden: {error}", { error: error.message }),
+      "err"
+    );
+  }
+}
+
+async function eigeneKarteAnlegen() {
+  if (!eigeneKarteEntwurf.bild) {
+    setEigeneKarteStatus(t("Es fehlt noch das Bild."), "err");
+    return;
+  }
+
+  const karte = eigeneKarte(
+    els.customCardName.value.trim().slice(0, 80) || t("Eigene Karte"),
+    eigeneKarteEntwurf.bild
+  );
+  merkeEigeneKarteInfo(karte.id);
+
+  if (eigeneKarteEntwurf.ziel === "deck") {
+    await addCardToDeck(karte);
+  } else {
+    await toggleCollection(karte);
+  }
+
+  closeModal(els.customCardModal);
 }
 
 // --- Länder optimieren ---------------------------------------------------
@@ -4049,6 +4295,17 @@ els.landsRecalcBtn.addEventListener("click", () => {
 });
 els.landsTotal.addEventListener("change", () => {
   renderLandsSplit(landsVorschlag(Number(els.landsTotal.value) || 0));
+});
+
+els.openCustomCollectionBtn.addEventListener("click", () => openEigeneKarteModal("collection"));
+els.openCustomDeckBtn.addEventListener("click", () => openEigeneKarteModal("deck"));
+els.customCardCloseBtn.addEventListener("click", () => closeModal(els.customCardModal));
+els.customCardFile.addEventListener("change", eigeneKarteBildGewaehlt);
+els.customCardSaveBtn.addEventListener("click", eigeneKarteAnlegen);
+els.customCardModal.addEventListener("click", (event) => {
+  if (event.target === els.customCardModal) {
+    closeModal(els.customCardModal);
+  }
 });
 
 els.legalityBadge.addEventListener("click", () => openModal(els.legalityModal));

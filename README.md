@@ -305,3 +305,44 @@ The ban list is not kept in this project. Card legality, type line and colour
 identity all come from Scryfall in one request per new card, so the check costs
 nothing extra. If Scryfall cannot be reached, size and copies are still checked
 and the rest is skipped.
+
+## Custom cards
+
+Not every card you want to play exists on Scryfall. A proxy, a card you
+drew yourself, something from a homebrew set. "Custom card" sits in the
+collection panel and in the deck toolbar, and both open the same window:
+pick an image, give it a name, done.
+
+A custom card is an image with a name and nothing else. There is no Oracle
+text, no type line, no mana cost and no price, so the detail view drops
+those sections instead of filling them with question marks.
+
+The image is shrunk in your browser to 488 pixels wide, the same size
+Scryfall serves as "normal", and stored as a data URL in the very field
+that otherwise holds the Scryfall address. That is why custom cards need
+no table and no endpoint of their own: they travel the same way as every
+other card, into `localStorage` without an account and up to the Worker
+with one. Expect roughly 100 kB per card. Without an account the browser's
+storage sets the ceiling, so a few dozen cards is the realistic order of
+magnitude, not a few hundred.
+
+The id of a custom card starts with `custom-`. Every part of the app reads
+that prefix as "there is nothing to look up here", which decides how the
+rest behaves:
+
+- The rules check counts them towards the 100 cards but never calls them
+  banned, not legal, or outside the commander's colours.
+- They carry no colour identity, so they fit under any commander.
+- They stay out of the mana curve and out of the colour split, since they
+  have no mana value and no mana symbols.
+- They have no price and are named as such in the sums, the same way a
+  card missing from Cardmarket is.
+- They group under "Other" in the deck, because they have no type line.
+- A deck may hold any number of copies. What a card you made yourself is
+  worth is yours to decide, so the singleton rule stays out of it.
+- A custom card can be the commander. Its own picture then stands for the
+  deck in the overview.
+
+Exporting a deck writes the name of a custom card like any other. Reading
+that list back in will not find it again, because the name means nothing
+to Scryfall.

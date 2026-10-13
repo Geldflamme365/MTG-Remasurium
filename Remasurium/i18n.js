@@ -226,6 +226,27 @@ const EN = {
   "{count} Treffer gefunden, aufgeteilt auf {pages} Seiten.":
     "{count} results found, spread over {pages} pages.",
 
+  // Eigene Karten
+  "Eigene Karte": "Custom card",
+  "eigene karte": "custom card",
+  "Name der Karte": "Card name",
+  "z.B. Mein Proxy": "e.g. my proxy",
+  "Bild": "Image",
+  "Karte anlegen": "Create card",
+  "Vorschau": "Preview",
+  "Noch kein Bild gewählt.": "No image chosen yet.",
+  "Wähle ein Bild aus.": "Pick an image.",
+  "Bild wird verkleinert...": "Shrinking the image...",
+  "Bild bereit, {size} kB.": "Image ready, {size} kB.",
+  "Das Bild konnte nicht gelesen werden: {error}": "The image could not be read: {error}",
+  "Es fehlt noch das Bild.": "The image is still missing.",
+  "Zu einer eigenen Karte gibt es keine anderen Ausgaben.":
+    "A custom card has no other printings.",
+  "Selbst angelegt, darum ohne Oracle-Text, Preis und weitere Ausgaben.":
+    "Made by you, so there is no Oracle text, no price and no other printings.",
+  "Eine eigene Karte ist ein Bild mit einem Namen. Oracle-Text, Preis und andere Ausgaben gibt es dazu nicht, und die Regelprüfung lässt sie in Ruhe. Das Bild wird im Browser auf Kartengrösse verkleinert und bleibt bei der Karte gespeichert.":
+    "A custom card is an image with a name. There is no Oracle text, no price and no other printings, and the rules check leaves it alone. The image is shrunk to card size in your browser and stays with the card.",
+
   // Länder optimieren
   "Länder optimieren": "Optimize lands",
   "länder optimieren": "optimize lands",

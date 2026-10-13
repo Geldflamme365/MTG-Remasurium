@@ -228,13 +228,23 @@ unchanged.
 
 ### Playtester
 
-"▶ Playtest" next to the rules check opens the deck as a game. The library is
-shuffled fresh, seven cards go to the hand, and the commander sits in its own
-zone next to the library, the same size.
+"▶ Playtest" next to the rules check opens the deck as a game **in a new
+tab**, at `#/playtest/<deck id>`. It is a page of its own, not a window on
+top of the editor: the site's header and footer step aside so the table
+gets the full height. That address can be opened or reloaded directly, so
+the game survives an accidental refresh and can sit on a second screen
+next to the editor.
 
-Drag a card from your hand or straight off the library onto the table and drop
-it where you want it. A click on a card in play taps it, turning it 90 degrees;
-another click turns it back. Clicking the library draws to your hand.
+The library is shuffled fresh, seven cards go to the hand, and the
+commander sits in its own zone next to the library, the same size.
+
+Drag a card from your hand or straight off the library onto the table and
+drop it where you want it. The card follows your pointer the whole way,
+and the place it came from stays visible but faded, so you can see what is
+moving and where from. A card already in play can be dragged to a new
+spot the same way. A click on a card in play taps it, turning it 90
+degrees; another click turns it back. Clicking the library draws to your
+hand.
 
 | Key | What it does |
 | --- | --- |
@@ -245,7 +255,11 @@ another click turns it back. Clicking the library draws to your hand.
 
 Browsers keep `Ctrl+N` for themselves and hand it to the window, not the page,
 so `Shift+N` starts a new game instead. The buttons in the bottom bar do the
-same thing. Nothing here is saved; closing the window ends the game.
+same thing. Nothing here is saved; closing the tab ends the game.
+
+Closing tries to close the tab, since the editor opened it. Open the
+address by hand and there is nothing to close, so it goes back to the deck
+list instead.
 
 ### Statistics
 

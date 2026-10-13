@@ -226,6 +226,11 @@ const EN = {
   "{count} Treffer gefunden, aufgeteilt auf {pages} Seiten.":
     "{count} results found, spread over {pages} pages.",
 
+  // Playtester
+  "Kein Deck angegeben.": "No deck given.",
+  "Deck wird geladen...": "Loading the deck...",
+  "Deck konnte nicht geladen werden: {error}": "The deck could not be loaded: {error}",
+
   // Eigene Karten
   "Eigene Karte": "Custom card",
   "eigene karte": "custom card",

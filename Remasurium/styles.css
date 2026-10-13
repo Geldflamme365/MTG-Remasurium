@@ -553,13 +553,26 @@ input::placeholder {
   object-fit: cover;
 }
 
-/* Playtester: ein Fenster über die ganze Fläche. */
-.modal-full {
+/* Playtester: eine eigene Seite in einem eigenen Tab. Kopf- und
+   Fusszeile treten dort zurück, damit das Spielfeld die ganze Höhe
+   bekommt. dvh statt vh, weil die Leisten mobiler Browser sonst einen
+   Teil des Feldes verdecken. */
+body.is-playtest .browser-shell,
+body.is-playtest .status-bar {
+  display: none;
+}
+
+body.is-playtest .desk {
+  width: 100%;
+  margin: 0;
+  gap: 0;
+}
+
+.playtest-page {
   display: flex;
   flex-direction: column;
-  width: min(1600px, calc(100vw - 24px));
-  height: calc(100vh - 24px);
-  max-width: none;
+  height: 100vh;
+  height: 100dvh;
 }
 
 .playtest-board {
@@ -676,12 +689,22 @@ input::placeholder {
   transform: rotate(90deg);
 }
 
+/* Die Karte am Zeiger muss über allem liegen, was die Seite sonst noch
+   aufspannt. Mit z-index 60 verschwand sie früher hinter dem Fenster des
+   Playtesters, das 1200 hatte: Man zog eine Karte, die man nicht sah. */
 .playtest-card.is-dragging {
   position: fixed;
-  z-index: 60;
-  opacity: 0.85;
+  z-index: 4000;
+  cursor: grabbing;
   pointer-events: none;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+  transform: rotate(-2deg) scale(1.04);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+}
+
+/* Solange eine Karte am Zeiger hängt, bleibt ihr Platz sichtbar, aber
+   blass. So ist zu erkennen, woher sie kommt und dass sie noch da ist. */
+.playtest-card.is-source {
+  opacity: 0.3;
 }
 
 .playtest-hand {

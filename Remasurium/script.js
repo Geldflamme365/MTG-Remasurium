@@ -89,7 +89,8 @@ const els = {
     suche: document.getElementById("view-suche"),
     collection: document.getElementById("view-collection"),
     decks: document.getElementById("view-decks"),
-    account: document.getElementById("view-account")
+    account: document.getElementById("view-account"),
+    playtest: document.getElementById("view-playtest")
   },
   deckOverview: document.getElementById("deckOverview"),
   deckEditor: document.getElementById("deckEditor"),
@@ -133,7 +134,7 @@ const els = {
   legalityBadge: document.getElementById("legalityBadge"),
   deckStatsSummary: document.getElementById("deckStatsSummary"),
   openPlaytestBtn: document.getElementById("openPlaytestBtn"),
-  playtestModal: document.getElementById("playtestModal"),
+  playtestView: document.getElementById("view-playtest"),
   playtestCloseBtn: document.getElementById("playtestCloseBtn"),
   playtestTitle: document.getElementById("playtestTitle"),
   playtestBoard: document.getElementById("playtestBoard"),
@@ -262,10 +263,16 @@ function entryFromCard(card, addedAt = null) {
 }
 
 // Alles, was keine bekannte Route ist, landet auf der Startseite.
-const ROUTEN = new Set(["suche", "collection", "decks", "account"]);
+const ROUTEN = new Set(["suche", "collection", "decks", "account", "playtest"]);
+
+// Eine Adresse kann mehr als den Seitennamen tragen: Der Playtester hängt
+// die Kennung seines Decks an, also #/playtest/<deck>.
+function routeTeile(hash) {
+  return String(hash).replace(/^#\/?/, "").trim().split("/").filter(Boolean);
+}
 
 function normalizeRoute(hash) {
-  const route = hash.replace(/^#\/?/, "").trim().toLowerCase();
+  const route = (routeTeile(hash)[0] || "").toLowerCase();
   return ROUTEN.has(route) ? route : "home";
 }
 
@@ -289,7 +296,8 @@ function updateRouteChrome(route) {
     suche: "scry://remasurium/search",
     collection: "scry://remasurium/collection",
     decks: "scry://remasurium/decks",
-    account: "scry://remasurium/account"
+    account: "scry://remasurium/account",
+    playtest: "scry://remasurium/playtest"
   };
   const label = labels[route] || labels.home;  if (els.routeFooter) {
     els.routeFooter.textContent = label;
@@ -308,10 +316,23 @@ function renderRoute() {
     suche: "MTG Remasurium - Suche",
     collection: "MTG Remasurium - Collection",
     decks: "MTG Remasurium - Decks",
-    account: "MTG Remasurium - Account"
+    account: "MTG Remasurium - Account",
+    playtest: "MTG Remasurium - Playtest"
   };
 
   document.title = titleMap[route] || "MTG Remasurium";
+
+  // Auf der Playtest-Seite treten Kopf- und Fusszeile zurück, damit das
+  // Spielfeld die ganze Höhe bekommt.
+  document.body.classList.toggle("is-playtest", route === "playtest");
+
+  if (route === "playtest") {
+    startePlaytestSeite(routeTeile(window.location.hash)[1] || "");
+  } else if (playtest.laeuft) {
+    // Wer von der Playtest-Seite wegnavigiert, beendet damit die Partie.
+    playtestZugAbbrechen();
+    playtest.laeuft = false;
+  }
 
   // Der Tab führt immer auf die Übersicht. Ohne das bliebe das zuletzt
   // geöffnete Deck stehen, obwohl man den Menüpunkt angeklickt hat.
@@ -3174,8 +3195,12 @@ function renderPlaytest() {
   els.playtestHint.hidden = playtest.board.length > 0;
 }
 
-function setPlaytestHinweis(text) {
-  els.playtestTitle.textContent = `playtest — ${state.activeDeck?.name || ""} — ${text}`;
+// Ohne Deckname bleibt er weg, statt als leeres Stück dazwischen zu
+// stehen. Schlägt das Laden fehl, wird bewusst keiner gesetzt: Sonst
+// stünde dort der Name des zuletzt geöffneten Decks und behauptete, es
+// gehe um dieses.
+function setPlaytestHinweis(text, deckName = state.activeDeck?.name || "") {
+  els.playtestTitle.textContent = deckName ? `playtest — ${deckName} — ${text}` : `playtest — ${text}`;
 }
 
 // Ein Stück aus seiner bisherigen Zone nehmen.
@@ -3206,6 +3231,7 @@ let zug = null;
 // weil dann nie ein pointerup mehr kommt.
 function playtestZugAbbrechen() {
   zug?.schatten?.remove();
+  zug?.quelle?.classList.remove("is-source");
   zug = null;
 }
 
@@ -3222,7 +3248,7 @@ function playtestZeigerStart(event) {
   }
 
   const karte = event.target.closest(".playtest-card");
-  if (!karte || !els.playtestModal.contains(karte)) {
+  if (!karte || !els.playtestView.contains(karte)) {
     return;
   }
 
@@ -3259,8 +3285,16 @@ function playtestZeigerBewegung(event) {
     zug.bewegt = true;
     zug.schatten = zug.quelle.cloneNode(true);
     zug.schatten.classList.add("is-dragging");
-    zug.schatten.classList.remove("is-tapped");
+    zug.schatten.classList.remove("is-tapped", "is-source", "is-board");
+    // Der Schatten hat eine feste Breite, die Karte in einer Zone aber
+    // die Breite ihrer Zone. Ohne diese Übernahme spränge sie beim
+    // Anfassen auf eine andere Grösse. offsetWidth statt der Masse aus
+    // getBoundingClientRect, weil eine getappte Karte um 90 Grad gedreht
+    // ist und dort Breite und Höhe vertauscht zurückkämen.
+    zug.schatten.style.width = `${zug.quelle.offsetWidth}px`;
     document.body.appendChild(zug.schatten);
+    // Der Platz, von dem die Karte kommt, bleibt blass sichtbar.
+    zug.quelle.classList.add("is-source");
   }
   zug.schatten.style.left = `${event.clientX - zug.griffX}px`;
   zug.schatten.style.top = `${event.clientY - zug.griffY}px`;
@@ -3268,9 +3302,10 @@ function playtestZeigerBewegung(event) {
 
 function playtestZeigerEnde(event) {
   if (!zug || event.pointerId !== zug.pointerId) return;
-  const { uid, ausBibliothek, bewegt, schatten, griffX, griffY } = zug;
+  const { uid, ausBibliothek, bewegt, schatten, griffX, griffY, quelle } = zug;
   zug = null;
   schatten?.remove();
+  quelle?.classList.remove("is-source");
 
   // Klick ohne Bewegung: aus der Bibliothek ziehen, sonst tappen.
   if (!bewegt) {
@@ -3318,20 +3353,67 @@ function playtestZeigerEnde(event) {
   renderPlaytest();
 }
 
+// Der Playtester bekommt einen eigenen Tab. Welches Deck gespielt wird,
+// steht in der Adresse, damit die Seite dort für sich allein laden kann
+// und nicht den Deck-Editor im Rücken braucht.
 function openPlaytest() {
   if (!state.activeDeck) return;
   if (!state.activeDeckCards.length) {
     setDeckStatus(t("Das Deck hat keine Karten zum Spielen."), "err");
     return;
   }
-  playtestNeu();
-  openModal(els.playtestModal);
+  window.open(
+    `${window.location.pathname}#/playtest/${encodeURIComponent(state.activeDeck.id)}`,
+    "_blank"
+  );
+}
+
+// Im frischen Tab ist noch kein Deck geladen. Die Sperre verhindert, dass
+// zwei Aufrufe kurz hintereinander zwei Partien gleichzeitig starten.
+let playtestLaedt = null;
+
+async function startePlaytestSeite(deckId) {
+  if (!deckId) {
+    setPlaytestHinweis(t("Kein Deck angegeben."), "");
+    return;
+  }
+  if (playtestLaedt === deckId || (playtest.laeuft && state.activeDeck?.id === deckId)) {
+    return;
+  }
+
+  playtestLaedt = deckId;
+  setPlaytestHinweis(t("Deck wird geladen..."), "");
+  try {
+    // Erst wenn feststeht, ob jemand angemeldet ist, weiss der Deckspeicher,
+    // wo er suchen soll.
+    await authBereit;
+    if (state.activeDeck?.id !== deckId) {
+      applyDeckResult(await deckStore.get(deckId));
+    }
+    if (!state.activeDeckCards.length) {
+      setPlaytestHinweis(t("Das Deck hat keine Karten zum Spielen."));
+      return;
+    }
+    playtestNeu();
+  } catch (error) {
+    setPlaytestHinweis(t("Deck konnte nicht geladen werden: {error}", { error: error.message }), "");
+  } finally {
+    playtestLaedt = null;
+  }
 }
 
 function closePlaytest() {
   playtestZugAbbrechen();
   playtest.laeuft = false;
-  closeModal(els.playtestModal);
+  // Der Tab wurde aus dem Deck-Editor heraus geöffnet und darf sich
+  // deshalb selbst schliessen. Wer die Adresse von Hand aufgerufen hat,
+  // landet stattdessen bei den Decks.
+  window.close();
+  setTimeout(() => {
+    if (!window.closed) {
+      window.location.hash = "#/decks";
+    }
+  }, 120);
 }
 
 // Das Brett kann sich unter laufenden Karten verändern: Fenstergrösse,
@@ -4383,7 +4465,7 @@ els.playtestDrawBtn.addEventListener("click", () => playtestZiehen(1));
 els.playtestTurnBtn.addEventListener("click", playtestNeuerZug);
 els.playtestResetBtn.addEventListener("click", playtestNeu);
 
-els.playtestModal.addEventListener("pointerdown", playtestZeigerStart);
+els.playtestView.addEventListener("pointerdown", playtestZeigerStart);
 window.addEventListener("pointermove", playtestZeigerBewegung);
 window.addEventListener("pointerup", playtestZeigerEnde);
 window.addEventListener("pointercancel", (event) => {
@@ -4395,7 +4477,7 @@ window.addEventListener("pointercancel", (event) => {
 // Tastenkürzel gelten nur, solange der Playtester offen ist und man nicht
 // gerade in einem Feld tippt.
 window.addEventListener("keydown", (event) => {
-  if (!playtest.laeuft || els.playtestModal.getAttribute("aria-hidden") === "true") {
+  if (!playtest.laeuft) {
     return;
   }
   if (/^(input|textarea|select)$/i.test(event.target.tagName)) {
@@ -4514,6 +4596,14 @@ renderResults();
 renderSearchDetails();
 renderCollection();
 renderCollectionDetails();
+
+// Die Anmeldung wird vor dem ersten Zeichnen angestossen und nicht erst
+// danach: Die Playtest-Seite holt beim Laden ihr Deck, und ob das aus der
+// Cloud oder aus dem Browser kommt, hängt daran. Ohne dieses Warten
+// suchte ein frisch geöffneter Tab ein Cloud-Deck im localStorage und
+// meldete "Deck nicht gefunden".
+const authBereit = initAuth();
+
 renderRoute();
 setStatus("Bereit. Gib einen Suchbegriff ein.", "muted");
 
@@ -4522,5 +4612,3 @@ setStatus("Bereit. Gib einen Suchbegriff ein.", "muted");
 setLang(getLang());
 updateLangToggle();
 watchForNewContent();
-
-initAuth();

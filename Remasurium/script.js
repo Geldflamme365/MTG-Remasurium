@@ -2084,10 +2084,11 @@ async function applyDeckVersion(print) {
 }
 
 async function setCommanderFromDeckCard(card) {
-  // Eine eigene Karte hat nur das eine Bild, einen eigenen Ausschnitt
-  // fürs Artwork gibt es nicht.
+  // Zu einer eigenen Karte gibt es keinen fertigen Ausschnitt. Er wird
+  // aus dem Kartenbild geschnitten, an der Stelle, an der das Bildfenster
+  // auf jeder Magic-Karte sitzt.
   if (istEigeneKarte(card.id)) {
-    await setCommander({ ...card, art: card.image ?? null });
+    await setCommander({ ...card, art: await eigenesArtwork(card.image) });
     return;
   }
 
@@ -2677,6 +2678,44 @@ function merkeEigeneKarten(ids) {
   }
 }
 
+// Auf einer Magic-Karte sitzt das Bildfenster immer an derselben Stelle.
+// Die Werte sind Anteile der Kartenfläche, abgemessen an einer echten
+// Karte: Das Fenster beginnt bei 11,6 Prozent der Höhe und endet bei
+// 55,4; waagerecht liegt es mittig und lässt links und rechts je 7,9
+// Prozent frei. Als Gegenprobe das Seitenverhältnis von 1,37 - genau
+// das, was auch Scryfall seinen Ausschnitten gibt.
+const ART_FENSTER = { x: 0.079, y: 0.1155, w: 0.842, h: 0.4389 };
+const EIGENE_ART_BREITE = 480;
+
+// Schneidet aus einer eigenen Karte das Bildfenster heraus. Die Übersicht
+// zeigt vom Commander nur dieses Stück, bei Scryfall-Karten liefert es
+// der art_crop. Ohne eigenen Ausschnitt stünde dort die ganze Karte mit
+// Titelzeile und Regeltext, zusammengequetscht auf Bannerhöhe.
+async function eigenesArtwork(bild) {
+  if (!bild) {
+    return null;
+  }
+  try {
+    const bitmap = await createImageBitmap(await (await fetch(bild)).blob());
+    const sx = Math.round(bitmap.width * ART_FENSTER.x);
+    const sy = Math.round(bitmap.height * ART_FENSTER.y);
+    const sw = Math.round(bitmap.width * ART_FENSTER.w);
+    const sh = Math.round(bitmap.height * ART_FENSTER.h);
+
+    const breite = Math.min(EIGENE_ART_BREITE, sw);
+    const hoehe = Math.max(1, Math.round((sh / sw) * breite));
+    const flaeche = document.createElement("canvas");
+    flaeche.width = breite;
+    flaeche.height = hoehe;
+    flaeche.getContext("2d").drawImage(bitmap, sx, sy, sw, sh, 0, 0, breite, hoehe);
+    bitmap.close?.();
+    return flaeche.toDataURL("image/jpeg", 0.82);
+  } catch {
+    // Ohne Ausschnitt fällt die Übersicht auf die ganze Karte zurück.
+    return null;
+  }
+}
+
 // Verkleinert ein hochgeladenes Bild auf Kartengrösse und gibt es als
 // Data-URL zurück.
 async function bildAlsDatenUrl(datei) {
@@ -2788,7 +2827,7 @@ async function eigeneKarteAnlegen() {
     // Der Commander steht nicht zusätzlich in der Kartenliste, deshalb
     // geht die Karte direkt auf den Platz. Der Stern holt sie später
     // wieder in die Liste zurück.
-    await setCommander({ ...karte, art: karte.image });
+    await setCommander({ ...karte, art: await eigenesArtwork(karte.image) });
   } else if (eigeneKarteEntwurf.ziel === "deck") {
     await addCardToDeck(karte);
   } else {

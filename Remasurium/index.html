@@ -24,7 +24,15 @@
         <a class="nav-link" href="#/home">Home</a>
         <a class="nav-link" href="#/suche">Suche</a>
         <a class="nav-link" href="#/collection">Collection</a>
-        <a class="nav-link" href="#/decks">Decks</a>
+        <!-- Decks hat zwei Ziele, deshalb klappt der Menüpunkt eine
+             Auswahl auf, statt direkt irgendwo zu landen. -->
+        <span class="nav-dropdown">
+          <a class="nav-link" href="#/decks" id="decksNavLink" aria-haspopup="true" aria-expanded="false">Decks</a>
+          <span class="nav-dropdown-panel" id="decksNavMenu" role="menu" hidden>
+            <a class="nav-dropdown-item" href="#/decks" role="menuitem">Meine Decks</a>
+            <a class="nav-dropdown-item" href="#/decks/community" role="menuitem">Community Decks</a>
+          </span>
+        </span>
         <a class="nav-link" href="#/account">Account</a>
         <button type="button" id="openFeedbackBtn" class="nav-link nav-button">Feedback</button>
         <button type="button" id="langToggle" class="small-toolbar-button lang-toggle" title="Sprache wechseln">EN</button>
@@ -214,12 +222,6 @@
             <strong id="deckCount">0 decks</strong>
           </div>
           <div class="panel-body">
-            <label class="field-label" for="deckScope">Anzeigen</label>
-            <select id="deckScope" class="deck-scope">
-              <option value="mine" selected>Meine Decks</option>
-              <option value="community">Community Decks</option>
-            </select>
-
             <p class="small-note" id="deckCommunityNote" hidden>
               Decks, die andere öffentlich gestellt haben. Ansehen geht immer,
               auch ohne Konto; ändern kann sie nur, wem sie gehören.

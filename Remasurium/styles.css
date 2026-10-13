@@ -1766,14 +1766,48 @@ body.is-splitting {
   opacity: 0.6;
 }
 
-/* Die Auswahl zwischen eigenen und öffentlichen Decks ist ein kleines
-   Menü, kein Reiterpaar: Sie steht einmal oben und soll die Übersicht
-   nicht dominieren. */
-.deck-scope {
-  width: auto;
-  min-width: 190px;
-  max-width: 100%;
-  margin-bottom: 14px;
+/* Aufklappmenü in der Navigationsleiste. Die Auswahl zwischen eigenen
+   und öffentlichen Decks gehört an den Menüpunkt selbst, nicht in die
+   Seite dahinter: Man wählt, bevor man irgendwo landet. */
+.nav-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: -8px;
+  z-index: 300;
+  display: grid;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--window-2);
+  border: 2px solid;
+  border-color: var(--edge-light) var(--edge-darker) var(--edge-darker) var(--edge-light);
+  box-shadow: 3px 3px 0 rgba(4, 3, 14, 0.5);
+}
+
+.nav-dropdown-panel[hidden] {
+  display: none;
+}
+
+.nav-dropdown-item {
+  padding: 7px 12px;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-dropdown-item:visited {
+  color: var(--ink);
+}
+
+.nav-dropdown-item:hover,
+.nav-dropdown-item:focus-visible {
+  color: #fff;
+  background: linear-gradient(180deg, #2f51d7, #10256f);
+  text-decoration: none;
 }
 
 .custom-card-colors {

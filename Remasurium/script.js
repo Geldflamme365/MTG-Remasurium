@@ -170,7 +170,8 @@ const els = {
   deckPanelTitle: document.getElementById("deckPanelTitle"),
   deckOwnTools: document.getElementById("deckOwnTools"),
   deckCommunityNote: document.getElementById("deckCommunityNote"),
-  deckScope: document.getElementById("deckScope"),
+  decksNavLink: document.getElementById("decksNavLink"),
+  decksNavMenu: document.getElementById("decksNavMenu"),
   openDeckSettingsBtn: document.getElementById("openDeckSettingsBtn"),
   deckSettingsModal: document.getElementById("deckSettingsModal"),
   deckSettingsCloseBtn: document.getElementById("deckSettingsCloseBtn"),
@@ -353,9 +354,14 @@ function renderRoute() {
   // Der Tab führt immer auf die Übersicht. Ohne das bliebe das zuletzt
   // geöffnete Deck stehen, obwohl man den Menüpunkt angeklickt hat.
   if (route === "decks") {
+    // Der zweite Teil der Adresse entscheidet, welche Liste erscheint:
+    // #/decks zeigt die eigenen, #/decks/community die öffentlichen. So
+    // lässt sich beides auch verlinken.
     showDeckOverview();
-    aktualisiereDeckListe();
+    setDeckTab(routeTeile(window.location.hash)[1] === "community" ? "community" : "mine");
   }
+
+  zeigeDecksMenu(false);
 
   setActiveNav(route);
   updateRouteChrome(route);
@@ -1779,7 +1785,6 @@ function setDeckTab(tab) {
   state.deckTab = tab === "community" ? "community" : "mine";
   const fremd = state.deckTab === "community";
 
-  els.deckScope.value = state.deckTab;
   els.deckOwnTools.hidden = fremd;
   els.deckCommunityNote.hidden = !fremd;
   els.deckPanelTitle.textContent = fremd ? "community decks" : "my decks";
@@ -4684,7 +4689,34 @@ els.landsTotal.addEventListener("change", () => {
   renderLandsSplit(landsVorschlag(Number(els.landsTotal.value) || 0));
 });
 
-els.deckScope.addEventListener("change", () => setDeckTab(els.deckScope.value));
+// Das Decks-Menü klappt beim Klick auf den Menüpunkt auf, statt sofort
+// irgendwo zu landen. Ein Klick daneben oder Escape schliesst es wieder.
+function zeigeDecksMenu(offen) {
+  const sichtbar = offen ?? els.decksNavMenu.hidden;
+  els.decksNavMenu.hidden = !sichtbar;
+  els.decksNavLink.setAttribute("aria-expanded", sichtbar ? "true" : "false");
+}
+
+els.decksNavLink.addEventListener("click", (event) => {
+  event.preventDefault();
+  zeigeDecksMenu();
+});
+
+for (const eintrag of els.decksNavMenu.querySelectorAll(".nav-dropdown-item")) {
+  eintrag.addEventListener("click", () => zeigeDecksMenu(false));
+}
+
+document.addEventListener("click", (event) => {
+  if (!els.decksNavMenu.hidden && !event.target.closest(".nav-dropdown")) {
+    zeigeDecksMenu(false);
+  }
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    zeigeDecksMenu(false);
+  }
+});
 
 els.openDeckSettingsBtn.addEventListener("click", openDeckSettings);
 els.deckSettingsCloseBtn.addEventListener("click", () => closeModal(els.deckSettingsModal));

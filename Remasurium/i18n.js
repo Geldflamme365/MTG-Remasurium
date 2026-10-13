@@ -226,6 +226,37 @@ const EN = {
   "{count} Treffer gefunden, aufgeteilt auf {pages} Seiten.":
     "{count} results found, spread over {pages} pages.",
 
+  // Community Decks und Deck-Einstellungen
+  "Meine Decks": "My decks",
+  "Community Decks": "Community decks",
+  "Decks, die andere öffentlich gestellt haben. Ansehen geht immer, auch ohne Konto; ändern kann sie nur, wem sie gehören.":
+    "Decks other people made public. Anyone can look at them, with or without an account; only their owner can change them.",
+  "Noch hat niemand ein Deck öffentlich gestellt.": "Nobody has made a deck public yet.",
+  "Öffentliche Decks werden geladen...": "Loading the public decks...",
+  "{count} öffentliches Deck.": "{count} public deck.",
+  "{count} öffentliche Decks.": "{count} public decks.",
+  "Öffentliche Decks konnten nicht geladen werden: {error}":
+    "The public decks could not be loaded: {error}",
+  "Deck von {name}. Ansehen geht, ändern nicht.": "{name}'s deck. You can look, not change.",
+  "Fremdes Deck. Ansehen geht, ändern nicht.":
+    "Someone else's deck. You can look, not change.",
+  "Dieses Deck gehört jemand anderem und lässt sich nur ansehen.":
+    "This deck belongs to someone else and can only be looked at.",
+  "Deck-Einstellungen": "Deck settings",
+  "deck-einstellungen": "deck settings",
+  "Sichtbarkeit": "Visibility",
+  "Dieses Deck öffentlich zeigen": "Show this deck publicly",
+  "Öffentliche Decks stehen unter \"Community Decks\" und lassen sich von allen ansehen, auch ohne Konto. Sichtbar werden dabei der Deckname, alle Karten und dein Anzeigename — deine E-Mail nie. Ändern kannst nur du das Deck. Zurücknehmen geht jederzeit mit demselben Häkchen.":
+    "Public decks appear under \"Community decks\" and anyone can look at them, with or without an account. That shows the deck name, every card and your display name — never your email. Only you can change the deck. The same tick box takes it back at any time.",
+  "Das Deck wird als Commander geprüft. Weitere Formate und die Bracket-Einstufung kommen später an dieser Stelle dazu.":
+    "The deck is checked as Commander. More formats and the bracket rating will join them here later.",
+  "Veröffentlichen geht nur mit einem Konto.": "Publishing needs an account.",
+  "Wird gespeichert...": "Saving...",
+  "Das Deck ist jetzt öffentlich.": "The deck is public now.",
+  "Das Deck ist wieder privat.": "The deck is private again.",
+  "Ein Deck lässt sich nur mit Konto veröffentlichen.":
+    "A deck can only be published with an account.",
+
   // Playtester
   "Kein Deck angegeben.": "No deck given.",
   "Deck wird geladen...": "Loading the deck...",

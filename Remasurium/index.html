@@ -210,10 +210,21 @@
       <div id="deckOverview">
         <article class="window panel">
           <div class="panel-title-bar panel-title-bar-wide">
-            <span>my decks</span>
+            <span id="deckPanelTitle">my decks</span>
             <strong id="deckCount">0 decks</strong>
           </div>
           <div class="panel-body">
+            <div class="tab-row" role="tablist" aria-label="Eigene oder öffentliche Decks">
+              <button type="button" class="retro-button tab-button active" data-deck-tab="mine" role="tab" aria-selected="true">Meine Decks</button>
+              <button type="button" class="retro-button tab-button" data-deck-tab="community" role="tab" aria-selected="false">Community Decks</button>
+            </div>
+
+            <p class="small-note" id="deckCommunityNote" hidden>
+              Decks, die andere öffentlich gestellt haben. Ansehen geht immer,
+              auch ohne Konto; ändern kann sie nur, wem sie gehören.
+            </p>
+
+            <div id="deckOwnTools">
             <label class="field-label" for="newDeckName">Neues Deck</label>
             <div class="search-row">
               <input id="newDeckName" type="text" maxlength="80" placeholder="Guff superfriends" autocomplete="off" />
@@ -235,6 +246,7 @@
 
             <div class="button-row">
               <button type="button" id="openImportBtn" class="retro-button">Deck importieren</button>
+            </div>
             </div>
 
             <div class="status-wrap">
@@ -283,6 +295,7 @@
                 <button id="deleteDeckBtn" type="button" class="retro-button">Deck löschen</button>
                 <button id="legalityBadge" type="button" class="legality-badge" title="Regelprüfung anzeigen">wird geprüft</button>
                 <button id="openCustomDeckBtn" type="button" class="retro-button">Eigene Karte</button>
+                <button id="openDeckSettingsBtn" type="button" class="retro-button">Deck-Einstellungen</button>
                 <button id="openLandsBtn" type="button" class="retro-button">Länder optimieren</button>
                 <button id="openPlaytestBtn" type="button" class="retro-button">&#9654; Playtest (Beta)</button>
               </div>
@@ -616,6 +629,39 @@
           Die Verteilung folgt den farbigen Manasymbolen im Deck. Ein Symbol wie
           {W/U} zählt für beide Farben je zur Hälfte. Die Zahlen lassen sich von
           Hand überschreiben, gesetzt wird immer das, was in den Feldern steht.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div id="deckSettingsModal" class="modal" aria-hidden="true">
+    <div class="modal-dialog window modal-narrow" role="dialog" aria-modal="true" aria-label="Deck-Einstellungen">
+      <div class="title-bar">
+        <span>deck-einstellungen</span>
+        <button id="deckSettingsCloseBtn" class="modal-close" type="button" aria-label="Schließen">X</button>
+      </div>
+      <div class="modal-body">
+        <span class="field-label">Sichtbarkeit</span>
+        <label class="check-row">
+          <input id="deckPublicToggle" type="checkbox" />
+          <span>Dieses Deck öffentlich zeigen</span>
+        </label>
+        <p class="small-note">
+          Öffentliche Decks stehen unter "Community Decks" und lassen sich von
+          allen ansehen, auch ohne Konto. Sichtbar werden dabei der Deckname,
+          alle Karten und dein Anzeigename &mdash; deine E-Mail nie. Ändern kannst
+          nur du das Deck. Zurücknehmen geht jederzeit mit demselben Häkchen.
+        </p>
+
+        <div class="status-wrap">
+          <span class="field-label">Status</span>
+          <div id="deckSettingsStatus" class="status muted">Bereit.</div>
+        </div>
+
+        <span class="field-label spaced">Format</span>
+        <p class="small-note">
+          Das Deck wird als Commander geprüft. Weitere Formate und die
+          Bracket-Einstufung kommen später an dieser Stelle dazu.
         </p>
       </div>
     </div>

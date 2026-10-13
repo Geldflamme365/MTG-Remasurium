@@ -31,6 +31,10 @@ function publicDeck(deck) {
     name: deck.name,
     format: deck.format || "commander",
     commander: deck.commander || null,
+    // Ohne Konto gibt es niemanden, der ein Deck veröffentlichen könnte:
+    // Es liegt nur in diesem Browser. Das Feld steht trotzdem da, damit
+    // die Oberfläche nicht zwei Formen auseinanderhalten muss.
+    isPublic: false,
     // Der Commander zählt als Karte des Decks mit.
     cardCount: countCards(deck.cards) + (deck.commander ? 1 : 0),
     // Nur Id und Menge: mehr braucht die Übersicht für den Preis nicht.
@@ -141,6 +145,10 @@ export function createDeckStore({ isLoggedIn }) {
           throw new Error("Der Deckname darf nicht leer sein.");
         }
         deck.name = clean;
+      }
+
+      if (changes.isPublic !== undefined) {
+        throw new Error("Ein Deck lässt sich nur mit Konto veröffentlichen.");
       }
 
       if (changes.commander !== undefined) {

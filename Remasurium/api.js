@@ -59,6 +59,8 @@ export const api = {
   deleteReview: (id) => call(`/reviews/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   listDecks: () => call("/decks"),
+  listPublicDecks: () => call("/decks/public"),
+  getPublicDeck: (id) => call(`/decks/public/${encodeURIComponent(id)}`),
   createDeck: (name, format) => call("/decks", { method: "POST", body: { name, format } }),
   getDeck: (id) => call(`/decks/${encodeURIComponent(id)}`),
   updateDeck: (id, changes) => call(`/decks/${encodeURIComponent(id)}`, { method: "PATCH", body: changes }),

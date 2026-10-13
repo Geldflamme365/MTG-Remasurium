@@ -483,6 +483,7 @@ function deckFromRow(row, cardCount = 0) {
         }
       : null,
     cardCount: total,
+    isPublic: Boolean(row.is_public),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -594,6 +595,83 @@ async function handleGetDeck(env, user, deckId) {
   return json({ deck: deckFromRow(deck, total), cards });
 }
 
+// Öffentliche Decks darf jeder lesen, auch ohne Konto. Nach aussen geht
+// dabei nur der Anzeigename des Besitzers, nie seine E-Mail: Wer ein Deck
+// öffentlich stellt, teilt sein Deck, nicht seine Adresse.
+const MAX_PUBLIC_DECKS = 60;
+
+async function handleListPublicDecks(env) {
+  const { results } = await env.DB.prepare(
+    `SELECT d.*, u.display_name AS owner_name, COALESCE(SUM(c.quantity), 0) AS card_count
+       FROM decks d
+       JOIN users u ON u.id = d.user_id
+       LEFT JOIN deck_cards c ON c.deck_id = d.id
+      WHERE d.is_public = 1
+      GROUP BY d.id
+      ORDER BY d.updated_at DESC
+      LIMIT ?`
+  )
+    .bind(MAX_PUBLIC_DECKS)
+    .all();
+
+  const decks = results || [];
+  if (!decks.length) {
+    return json({ decks: [] });
+  }
+
+  // Dieselbe zweite Abfrage wie bei den eigenen Decks: Die Übersicht
+  // braucht je Deck die Karten-Ids für den Preis, aber keine Abfrage
+  // je Deck.
+  const platzhalter = decks.map(() => "?").join(", ");
+  const { results: karten } = await env.DB.prepare(
+    `SELECT deck_id, card_id, quantity FROM deck_cards WHERE deck_id IN (${platzhalter})`
+  )
+    .bind(...decks.map((row) => row.id))
+    .all();
+
+  const nachDeck = new Map();
+  for (const zeile of karten || []) {
+    if (!nachDeck.has(zeile.deck_id)) {
+      nachDeck.set(zeile.deck_id, []);
+    }
+    nachDeck.get(zeile.deck_id).push({ id: zeile.card_id, quantity: zeile.quantity });
+  }
+
+  return json({
+    decks: decks.map((row) => ({
+      ...deckFromRow(row, row.card_count),
+      owner: row.owner_name,
+      cards: nachDeck.get(row.id) || []
+    }))
+  });
+}
+
+async function handleGetPublicDeck(env, deckId) {
+  const deck = await env.DB.prepare(
+    `SELECT d.*, u.display_name AS owner_name
+       FROM decks d
+       JOIN users u ON u.id = d.user_id
+      WHERE d.id = ? AND d.is_public = 1`
+  )
+    .bind(deckId)
+    .first();
+
+  if (!deck) {
+    return fail("Deck nicht gefunden oder nicht öffentlich.", 404);
+  }
+
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM deck_cards WHERE deck_id = ? ORDER BY added_at DESC"
+  )
+    .bind(deckId)
+    .all();
+
+  const cards = (results || []).map(deckCardFromRow);
+  const total = cards.reduce((sum, card) => sum + card.quantity, 0);
+
+  return json({ deck: { ...deckFromRow(deck, total), owner: deck.owner_name }, cards });
+}
+
 async function handleUpdateDeck(request, env, user, deckId) {
   const deck = await findDeck(env, user.id, deckId);
   if (!deck) {
@@ -643,6 +721,13 @@ async function handleUpdateDeck(request, env, user, deckId) {
         .bind(deckId, card.id)
         .run();
     }
+  }
+
+  // Sichtbarkeit: true nimmt das Deck in die Community-Übersicht auf,
+  // false nimmt es wieder heraus. Besitzer bleibt es in beiden Fällen.
+  if (body.isPublic !== undefined) {
+    updates.push("is_public = ?");
+    values.push(body.isPublic ? 1 : 0);
   }
 
   if (!updates.length) {
@@ -1006,6 +1091,17 @@ async function handleApi(request, env, url) {
   // Ohne Konto möglich, deshalb vor der Anmeldeprüfung.
   if (path === "/reviews" && method === "POST") {
     return handleCreateReview(request, env, session);
+  }
+
+  // Öffentliche Decks sind für alle lesbar, auch ohne Anmeldung. Sie
+  // stehen vor der Prüfung und vor /decks/:id, sonst würde "public" als
+  // Deck-Kennung gelesen.
+  if (path === "/decks/public" && method === "GET") {
+    return handleListPublicDecks(env);
+  }
+  const publicDeckMatch = path.match(/^\/decks\/public\/([^/]+)$/);
+  if (publicDeckMatch && method === "GET") {
+    return handleGetPublicDeck(env, decodeURIComponent(publicDeckMatch[1]));
   }
 
   if (path === "/auth/me" && method === "GET") {

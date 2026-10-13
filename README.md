@@ -87,6 +87,8 @@ sends it automatically, so you do not have to handle it yourself.
 | PUT | `/collection/:cardId` | Add or update one card |
 | DELETE | `/collection/:cardId` | Remove one card |
 | POST | `/collection/merge` | Copy local cards up without overwriting |
+| GET | `/decks/public` | List public decks (no account needed) |
+| GET | `/decks/public/:id` | One public deck with its cards (no account needed) |
 | GET | `/decks` | List all decks with their card count |
 | POST | `/decks` | Create a deck |
 | GET | `/decks/:id` | One deck with all its cards |
@@ -193,6 +195,41 @@ width is remembered for next time. You can also move it with the arrow keys.
 
 Decks work without an account too. They then live in your browser and move up
 to your account the first time you log in.
+
+### Deck settings
+
+"Deck settings" in the editor toolbar holds what belongs to the deck as a
+whole rather than to a single card. Right now that is its visibility.
+Format and the bracket rating will join it there later; for now every deck
+is checked as Commander.
+
+### Community decks
+
+The Decks tab has two of them: **My decks** and **Community decks**. The
+second lists every deck that someone has made public, newest change first,
+and it works without an account — looking at decks needs no sign-up.
+
+A deck becomes public through the tick box in its settings, and the same
+tick box takes it back. What that shares is the deck name, every card in
+it and the owner's display name. Never the email address: the public
+endpoints read `display_name` and nothing else from the users table.
+
+A public deck opens in the ordinary deck editor, but read-only. The card
+list, the rules check, the statistics, the prices, export and the
+playtester all work on it. Everything that would change it is gone:
+delete, rename, quantities, the commander star, custom cards, optimize
+lands, the deck settings and the card search beside it.
+
+That hiding is only the surface. The functions behind those buttons check
+the same flag and refuse, so a stray keyboard shortcut cannot slip past
+it, and the Worker never accepted the request in the first place: a deck
+is written only by its owner, and `GET /decks/:id` answers 404 for
+everyone else — public or not. The public route is a separate, read-only
+door.
+
+Decks that live only in your browser cannot be made public. There would be
+nothing for anyone else to fetch, so the tick box stays disabled until you
+have an account.
 
 ### Import and export
 

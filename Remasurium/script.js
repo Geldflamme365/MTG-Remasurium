@@ -30,6 +30,13 @@ const state = {
   collection: loadCollection(),
   user: null,
   decks: [],
+  // "mine" zeigt die eigenen Decks, "community" die öffentlich
+  // gestellten aller Konten.
+  deckTab: "mine",
+  communityDecks: [],
+  // Ein fremdes Deck wird nur angesehen. Die Flagge blendet alles aus,
+  // was es ändern würde, und hält die Funktionen dahinter zusätzlich an.
+  deckReadOnly: false,
   activeDeck: null,
   activeDeckCards: [],
   deckResults: [],
@@ -160,6 +167,15 @@ const els = {
   landsSplit: document.getElementById("landsSplit"),
   landsStatus: document.getElementById("landsStatus"),
   landsApplyBtn: document.getElementById("landsApplyBtn"),
+  deckPanelTitle: document.getElementById("deckPanelTitle"),
+  deckOwnTools: document.getElementById("deckOwnTools"),
+  deckCommunityNote: document.getElementById("deckCommunityNote"),
+  deckTabs: document.querySelectorAll("[data-deck-tab]"),
+  openDeckSettingsBtn: document.getElementById("openDeckSettingsBtn"),
+  deckSettingsModal: document.getElementById("deckSettingsModal"),
+  deckSettingsCloseBtn: document.getElementById("deckSettingsCloseBtn"),
+  deckSettingsStatus: document.getElementById("deckSettingsStatus"),
+  deckPublicToggle: document.getElementById("deckPublicToggle"),
   openCustomCollectionBtn: document.getElementById("openCustomCollectionBtn"),
   openCustomDeckBtn: document.getElementById("openCustomDeckBtn"),
   customCardModal: document.getElementById("customCardModal"),
@@ -338,7 +354,7 @@ function renderRoute() {
   // geöffnete Deck stehen, obwohl man den Menüpunkt angeklickt hat.
   if (route === "decks") {
     showDeckOverview();
-    refreshDecks();
+    aktualisiereDeckListe();
   }
 
   setActiveNav(route);
@@ -1584,12 +1600,21 @@ function deckCardFromScryfall(card) {
   };
 }
 
+function aktuelleDeckListe() {
+  return state.deckTab === "community" ? state.communityDecks : state.decks;
+}
+
 function renderDeckList() {
-  const decks = state.decks;
+  const fremd = state.deckTab === "community";
+  const decks = aktuelleDeckListe();
   els.deckCount.textContent = `${decks.length} ${decks.length === 1 ? "deck" : "decks"}`;
 
   if (!decks.length) {
-    els.deckList.innerHTML = `<div class="empty-state">Noch keine Decks. Gib oben einen Namen ein und leg los.</div>`;
+    els.deckList.innerHTML = `<div class="empty-state">${escapeHtml(
+      fremd
+        ? t("Noch hat niemand ein Deck öffentlich gestellt.")
+        : t("Noch keine Decks. Gib oben einen Namen ein und leg los.")
+    )}</div>`;
     return;
   }
 
@@ -1611,7 +1636,22 @@ function renderDeckList() {
         count: deck.cardCount
       })} · ${escapeHtml(preisText(preis))}${
         deck.commander ? ` · ${escapeHtml(deck.commander.name)}` : ""
-      }`;
+      }${fremd && deck.owner ? ` · ${escapeHtml(deck.owner)}` : ""}`;
+
+      // Ein fremdes Deck lässt sich nur öffnen, nicht umbenennen.
+      if (fremd) {
+        return `
+          <div class="deck-tile">
+            <button type="button" class="deck-tile-open" data-public-deck="${escapeHtml(deck.id)}" title="${escapeHtml(deck.name)} ansehen">
+              ${bild(deck)}
+              <span class="deck-tile-body">
+                <strong>${escapeHtml(deck.name)}</strong>
+                <span>${info}</span>
+              </span>
+            </button>
+          </div>
+        `;
+      }
 
       // Beim Umbenennen tritt an die Stelle des Namens ein Eingabefeld.
       // Der Öffnen-Knopf entfällt so lange, damit ein Klick ins Feld
@@ -1645,6 +1685,10 @@ function renderDeckList() {
 
   for (const tile of els.deckList.querySelectorAll("button[data-deck]")) {
     tile.addEventListener("click", () => openDeck(tile.dataset.deck));
+  }
+
+  for (const tile of els.deckList.querySelectorAll("button[data-public-deck]")) {
+    tile.addEventListener("click", () => openPublicDeck(tile.dataset.publicDeck));
   }
 
   for (const btn of els.deckList.querySelectorAll("button[data-rename]")) {
@@ -1722,10 +1766,128 @@ async function refreshDecks() {
   }
 }
 
+// --- Community Decks ------------------------------------------------------
+//
+// Ein öffentliches Deck gehört weiterhin seinem Konto. Hier wird es nur
+// angesehen: derselbe Editor, aber ohne alles, was es ändern würde.
+
+function aktualisiereDeckListe() {
+  return state.deckTab === "community" ? refreshCommunityDecks() : refreshDecks();
+}
+
+function setDeckTab(tab) {
+  state.deckTab = tab === "community" ? "community" : "mine";
+  const fremd = state.deckTab === "community";
+
+  for (const btn of els.deckTabs) {
+    const aktiv = btn.dataset.deckTab === state.deckTab;
+    btn.classList.toggle("active", aktiv);
+    btn.setAttribute("aria-selected", aktiv ? "true" : "false");
+  }
+  els.deckOwnTools.hidden = fremd;
+  els.deckCommunityNote.hidden = !fremd;
+  els.deckPanelTitle.textContent = fremd ? "community decks" : "my decks";
+
+  renderDeckList();
+  aktualisiereDeckListe();
+}
+
+async function refreshCommunityDecks() {
+  setDeckStatus(t("Öffentliche Decks werden geladen..."), "muted");
+  try {
+    state.communityDecks = (await api.listPublicDecks()).decks;
+    renderDeckList();
+    ladeDeckPreise();
+    setDeckStatus(
+      t(state.communityDecks.length === 1 ? "{count} öffentliches Deck." : "{count} öffentliche Decks.", {
+        count: state.communityDecks.length
+      }),
+      "ok"
+    );
+  } catch (error) {
+    setDeckStatus(
+      t("Öffentliche Decks konnten nicht geladen werden: {error}", { error: error.message }),
+      "err"
+    );
+  }
+}
+
+async function openPublicDeck(deckId) {
+  setDeckStatus(t("Deck wird geladen..."), "muted");
+  try {
+    const result = await api.getPublicDeck(deckId);
+    state.deckReadOnly = true;
+    els.deckOverview.hidden = true;
+    els.deckEditor.hidden = false;
+    els.deckEditor.classList.add("is-readonly");
+    applyDeckResult(result);
+    setDeckStatus(
+      result.deck.owner
+        ? t("Deck von {name}. Ansehen geht, ändern nicht.", { name: result.deck.owner })
+        : t("Fremdes Deck. Ansehen geht, ändern nicht."),
+      "muted"
+    );
+  } catch (error) {
+    setDeckStatus(t("Deck konnte nicht geladen werden: {error}", { error: error.message }), "err");
+  }
+}
+
+// Die Knöpfe sind im Nur-Lesen-Modus ausgeblendet. Das hier hält
+// zusätzlich die Funktionen dahinter an, damit auch ein Tastenkürzel
+// oder ein alter Verweis nichts ändert.
+function deckAenderbar() {
+  if (state.deckReadOnly) {
+    setDeckStatus(t("Dieses Deck gehört jemand anderem und lässt sich nur ansehen."), "muted");
+    return false;
+  }
+  return true;
+}
+
+// --- Deck-Einstellungen ---------------------------------------------------
+//
+// Bisher steht hier nur die Sichtbarkeit. Format und Bracket bekommen
+// später an derselben Stelle ihren Platz.
+
+function openDeckSettings() {
+  if (!state.activeDeck || !deckAenderbar()) {
+    return;
+  }
+  els.deckPublicToggle.checked = Boolean(state.activeDeck.isPublic);
+  // Ohne Konto liegt das Deck nur in diesem Browser; es gäbe nichts, was
+  // andere aufrufen könnten.
+  els.deckPublicToggle.disabled = !state.user;
+  schreibeStatus(
+    els.deckSettingsStatus,
+    state.user ? t("Bereit.") : t("Veröffentlichen geht nur mit einem Konto."),
+    state.user ? "muted" : "err"
+  );
+  openModal(els.deckSettingsModal);
+}
+
+async function deckSichtbarkeitAendern() {
+  if (!state.activeDeck || !deckAenderbar()) {
+    return;
+  }
+  const oeffentlich = els.deckPublicToggle.checked;
+  schreibeStatus(els.deckSettingsStatus, t("Wird gespeichert..."), "muted");
+  try {
+    applyDeckResult(await deckStore.update(state.activeDeck.id, { isPublic: oeffentlich }));
+    schreibeStatus(
+      els.deckSettingsStatus,
+      oeffentlich ? t("Das Deck ist jetzt öffentlich.") : t("Das Deck ist wieder privat."),
+      "ok"
+    );
+  } catch (error) {
+    // Das Häkchen zurückdrehen, sonst zeigt es etwas an, was nicht gilt.
+    els.deckPublicToggle.checked = !oeffentlich;
+    schreibeStatus(els.deckSettingsStatus, error.message, "err");
+  }
+}
+
 // Die Übersicht steht sofort, die Preise kommen nach. Beim ersten Mal
 // kostet das ein paar Abfragen, danach liegt alles im Cache.
 async function ladeDeckPreise() {
-  const ids = state.decks.flatMap((deck) => [
+  const ids = aktuelleDeckListe().flatMap((deck) => [
     ...(deck.cards || []).map((karte) => karte.id),
     ...(deck.commander ? [deck.commander.id] : [])
   ]);
@@ -1743,6 +1905,8 @@ async function ladeDeckPreise() {
 function showDeckOverview() {
   state.activeDeck = null;
   state.activeDeckCards = [];
+  state.deckReadOnly = false;
+  els.deckEditor.classList.remove("is-readonly");
   els.deckOverview.hidden = false;
   els.deckEditor.hidden = true;
   renderDeckList();
@@ -1809,6 +1973,7 @@ function renderCommanderSlot() {
 // Sie wandert zurück in die Kartenliste, denn beim Ernennen war sie von
 // dort gekommen.
 async function demoteCommander() {
+  if (!deckAenderbar()) return;
   const commander = state.activeDeck?.commander;
   if (!commander) {
     return;
@@ -1853,6 +2018,7 @@ async function demoteCommander() {
 // Nimmt die Karte ganz aus dem Deck, im Gegensatz zum Stern, der sie
 // nur vom Commander-Platz zurück in die Liste schiebt.
 async function removeCommanderCard() {
+  if (!deckAenderbar()) return;
   const commander = state.activeDeck?.commander;
   if (!commander) {
     return;
@@ -2085,6 +2251,7 @@ function renderDeckCards() {
 
 // Tauscht die Ausgabe einer Karte im Deck. Die Menge bleibt erhalten.
 async function applyDeckVersion(print) {
+  if (!deckAenderbar()) return;
   const previous = state.deckVersionCard;
   if (!previous || !state.activeDeck) {
     return;
@@ -3004,6 +3171,7 @@ function setLandsStatus(text, art = "muted") {
 }
 
 async function applyLands() {
+  if (!deckAenderbar()) return;
   if (!state.activeDeck) return;
   const wuensche = [...els.landsSplit.querySelectorAll("input[data-farbe]")].map((feld) => ({
     farbe: feld.dataset.farbe,
@@ -3544,6 +3712,8 @@ function applyDeckResult(result) {
 
 async function openDeck(deckId) {
   setDeckStatus("Lade Deck...", "muted");
+  state.deckReadOnly = false;
+  els.deckEditor.classList.remove("is-readonly");
   try {
     const result = await deckStore.get(deckId);
     applyDeckResult(result);
@@ -3571,6 +3741,7 @@ async function createDeck() {
 }
 
 async function renameDeck() {
+  if (!deckAenderbar()) return;
   if (!state.activeDeck) return;
   const name = els.deckNameInput.value.trim();
   try {
@@ -3583,6 +3754,7 @@ async function renameDeck() {
 }
 
 async function deleteDeck() {
+  if (!deckAenderbar()) return;
   if (!state.activeDeck) return;
   const name = state.activeDeck.name;
   if (!window.confirm(`Deck "${name}" wirklich löschen? Das lässt sich nicht rückgängig machen.`)) {
@@ -3599,6 +3771,7 @@ async function deleteDeck() {
 }
 
 async function addCardToDeck(card, quantity = 1) {
+  if (!deckAenderbar()) return;
   if (!state.activeDeck) return;
   try {
     applyDeckResult(await deckStore.putCard(state.activeDeck.id, deckCardFromScryfall(card), quantity));
@@ -3609,6 +3782,7 @@ async function addCardToDeck(card, quantity = 1) {
 }
 
 async function changeDeckQuantity(card, quantity) {
+  if (!deckAenderbar()) return;
   try {
     applyDeckResult(await deckStore.putCard(state.activeDeck.id, card, quantity));
     setDeckStatus(`${card.name}: ${quantity}x`, "ok");
@@ -3618,6 +3792,7 @@ async function changeDeckQuantity(card, quantity) {
 }
 
 async function removeDeckCard(cardId) {
+  if (!deckAenderbar()) return;
   try {
     applyDeckResult(await deckStore.removeCard(state.activeDeck.id, cardId));
     setDeckStatus("Karte entfernt.", "ok");
@@ -3627,6 +3802,7 @@ async function removeDeckCard(cardId) {
 }
 
 async function setCommander(card) {
+  if (!deckAenderbar()) return;
   if (!state.activeDeck) return;
   try {
     const commander = card
@@ -4022,6 +4198,7 @@ async function runDeckSearch() {
 // Quick Add nimmt den besten Treffer zum Namen, damit man eine Karte
 // eintippen kann, ohne den Umweg über die Suchergebnisse.
 async function quickAdd() {
+  if (!deckAenderbar()) return;
   const name = els.quickAddInput.value.trim();
   if (!name) {
     setDeckStatus("Bitte einen Kartennamen eingeben.", "err");
@@ -4509,6 +4686,19 @@ els.landsRecalcBtn.addEventListener("click", () => {
 });
 els.landsTotal.addEventListener("change", () => {
   renderLandsSplit(landsVorschlag(Number(els.landsTotal.value) || 0));
+});
+
+for (const btn of els.deckTabs) {
+  btn.addEventListener("click", () => setDeckTab(btn.dataset.deckTab));
+}
+
+els.openDeckSettingsBtn.addEventListener("click", openDeckSettings);
+els.deckSettingsCloseBtn.addEventListener("click", () => closeModal(els.deckSettingsModal));
+els.deckPublicToggle.addEventListener("change", deckSichtbarkeitAendern);
+els.deckSettingsModal.addEventListener("click", (event) => {
+  if (event.target === els.deckSettingsModal) {
+    closeModal(els.deckSettingsModal);
+  }
 });
 
 els.openCustomCollectionBtn.addEventListener("click", () => openEigeneKarteModal("collection"));

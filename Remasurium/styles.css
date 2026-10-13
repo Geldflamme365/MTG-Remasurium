@@ -1713,6 +1713,45 @@ body.is-splitting {
 
 /* Die fünf Farben stehen nebeneinander und brechen auf schmalen
    Fenstern um. */
+/* Ein fremdes Deck wird nur angesehen. Alles, was es ändern würde, ist
+   hier ausgeblendet; die Funktionen dahinter halten zusätzlich an, falls
+   doch jemand drankommt. Ansehen, Regelprüfung, Statistik, Export und
+   Playtest bleiben. */
+#deckEditor.is-readonly #deleteDeckBtn,
+#deckEditor.is-readonly #openCustomDeckBtn,
+#deckEditor.is-readonly #openDeckSettingsBtn,
+#deckEditor.is-readonly #openLandsBtn,
+#deckEditor.is-readonly #renameDeckBtn,
+#deckEditor.is-readonly .deck-card-actions,
+#deckEditor.is-readonly .commander-slot .button-row,
+#deckEditor.is-readonly .console-panel,
+#deckEditor.is-readonly .deck-splitter {
+  display: none;
+}
+
+/* Ohne das Suchfenster bekommt die Deckspalte die ganze Breite. */
+#deckEditor.is-readonly .deck-layout {
+  display: block;
+}
+
+#deckEditor.is-readonly #deckNameInput {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.check-row input[disabled] + span {
+  opacity: 0.6;
+}
+
 .custom-card-colors {
   display: flex;
   flex-wrap: wrap;

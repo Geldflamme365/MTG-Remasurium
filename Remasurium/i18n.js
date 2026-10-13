@@ -227,6 +227,7 @@ const EN = {
     "{count} results found, spread over {pages} pages.",
 
   // Community Decks und Deck-Einstellungen
+  "Anzeigen": "Show",
   "Meine Decks": "My decks",
   "Community Decks": "Community decks",
   "Decks, die andere öffentlich gestellt haben. Ansehen geht immer, auch ohne Konto; ändern kann sie nur, wem sie gehören.":

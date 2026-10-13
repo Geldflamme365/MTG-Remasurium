@@ -1742,14 +1742,38 @@ body.is-splitting {
 .check-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   margin-top: 8px;
   color: var(--ink);
   cursor: pointer;
 }
 
+/* Die allgemeine Regel für Eingabefelder gibt jedem input volle Breite
+   und 40 Pixel Höhe. Für ein Häkchen ergibt das ein riesiges Quadrat,
+   deshalb hier zurück auf Kästchengrösse. Die Farbe ist dieselbe wie in
+   der Titelleiste, damit es zum übrigen Fenster passt. */
+.check-row input[type="checkbox"] {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--title-a);
+  box-shadow: none;
+}
+
 .check-row input[disabled] + span {
   opacity: 0.6;
+}
+
+/* Die Auswahl zwischen eigenen und öffentlichen Decks ist ein kleines
+   Menü, kein Reiterpaar: Sie steht einmal oben und soll die Übersicht
+   nicht dominieren. */
+.deck-scope {
+  width: auto;
+  min-width: 190px;
+  max-width: 100%;
+  margin-bottom: 14px;
 }
 
 .custom-card-colors {

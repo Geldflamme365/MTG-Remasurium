@@ -214,10 +214,11 @@
             <strong id="deckCount">0 decks</strong>
           </div>
           <div class="panel-body">
-            <div class="tab-row" role="tablist" aria-label="Eigene oder öffentliche Decks">
-              <button type="button" class="retro-button tab-button active" data-deck-tab="mine" role="tab" aria-selected="true">Meine Decks</button>
-              <button type="button" class="retro-button tab-button" data-deck-tab="community" role="tab" aria-selected="false">Community Decks</button>
-            </div>
+            <label class="field-label" for="deckScope">Anzeigen</label>
+            <select id="deckScope" class="deck-scope">
+              <option value="mine" selected>Meine Decks</option>
+              <option value="community">Community Decks</option>
+            </select>
 
             <p class="small-note" id="deckCommunityNote" hidden>
               Decks, die andere öffentlich gestellt haben. Ansehen geht immer,

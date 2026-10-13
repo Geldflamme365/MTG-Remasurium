@@ -170,7 +170,7 @@ const els = {
   deckPanelTitle: document.getElementById("deckPanelTitle"),
   deckOwnTools: document.getElementById("deckOwnTools"),
   deckCommunityNote: document.getElementById("deckCommunityNote"),
-  deckTabs: document.querySelectorAll("[data-deck-tab]"),
+  deckScope: document.getElementById("deckScope"),
   openDeckSettingsBtn: document.getElementById("openDeckSettingsBtn"),
   deckSettingsModal: document.getElementById("deckSettingsModal"),
   deckSettingsCloseBtn: document.getElementById("deckSettingsCloseBtn"),
@@ -1779,11 +1779,7 @@ function setDeckTab(tab) {
   state.deckTab = tab === "community" ? "community" : "mine";
   const fremd = state.deckTab === "community";
 
-  for (const btn of els.deckTabs) {
-    const aktiv = btn.dataset.deckTab === state.deckTab;
-    btn.classList.toggle("active", aktiv);
-    btn.setAttribute("aria-selected", aktiv ? "true" : "false");
-  }
+  els.deckScope.value = state.deckTab;
   els.deckOwnTools.hidden = fremd;
   els.deckCommunityNote.hidden = !fremd;
   els.deckPanelTitle.textContent = fremd ? "community decks" : "my decks";
@@ -4688,9 +4684,7 @@ els.landsTotal.addEventListener("change", () => {
   renderLandsSplit(landsVorschlag(Number(els.landsTotal.value) || 0));
 });
 
-for (const btn of els.deckTabs) {
-  btn.addEventListener("click", () => setDeckTab(btn.dataset.deckTab));
-}
+els.deckScope.addEventListener("change", () => setDeckTab(els.deckScope.value));
 
 els.openDeckSettingsBtn.addEventListener("click", openDeckSettings);
 els.deckSettingsCloseBtn.addEventListener("click", () => closeModal(els.deckSettingsModal));

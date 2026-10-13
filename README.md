@@ -205,9 +205,10 @@ is checked as Commander.
 
 ### Community decks
 
-The Decks tab has two of them: **My decks** and **Community decks**. The
-second lists every deck that someone has made public, newest change first,
-and it works without an account — looking at decks needs no sign-up.
+A small dropdown above the deck list picks what it shows: **My decks** or
+**Community decks**. The second lists every deck someone made public,
+newest change first, and it works without an account: looking at decks
+needs no sign-up.
 
 A deck becomes public through the tick box in its settings, and the same
 tick box takes it back. What that shares is the deck name, every card in

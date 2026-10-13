@@ -628,6 +628,30 @@
         <label class="field-label" for="customCardName">Name der Karte</label>
         <input id="customCardName" type="text" maxlength="80" placeholder="z.B. Mein Proxy" autocomplete="off" />
 
+        <label class="field-label spaced" for="customCardType">Kartentyp</label>
+        <!-- Die Beschriftungen sind genau die Überschriften, unter denen die
+             Karte im Deck einsortiert wird. -->
+        <select id="customCardType">
+          <option value="">Sonstige</option>
+          <option value="creature">Kreaturen</option>
+          <option value="planeswalker">Planeswalker</option>
+          <option value="instant">Spontanzauber</option>
+          <option value="sorcery">Hexereien</option>
+          <option value="artifact">Artefakte</option>
+          <option value="enchantment">Verzauberungen</option>
+          <option value="battle">Schlachten</option>
+          <option value="land">Länder</option>
+        </select>
+
+        <span class="field-label spaced">Farbidentität</span>
+        <div id="customCardColors" class="custom-card-colors">
+          <label><input type="checkbox" value="W" /> Weiss</label>
+          <label><input type="checkbox" value="U" /> Blau</label>
+          <label><input type="checkbox" value="B" /> Schwarz</label>
+          <label><input type="checkbox" value="R" /> Rot</label>
+          <label><input type="checkbox" value="G" /> Grün</label>
+        </div>
+
         <label class="field-label spaced" for="customCardFile">Bild</label>
         <input id="customCardFile" type="file" accept="image/*" />
 
@@ -643,10 +667,13 @@
         </div>
 
         <p class="small-note">
-          Eine eigene Karte ist ein Bild mit einem Namen. Oracle-Text, Preis und
-          andere Ausgaben gibt es dazu nicht, und die Regelprüfung lässt sie in
-          Ruhe. Das Bild wird im Browser auf Kartengrösse verkleinert und bleibt
-          bei der Karte gespeichert.
+          Oracle-Text, Preis und andere Ausgaben gibt es zu einer eigenen Karte
+          nicht, und die Regelprüfung nennt sie nie verboten. Der Typ bestimmt,
+          unter welcher Überschrift sie im Deck steht. Die Farbidentität zählt,
+          sobald die Karte Commander ist: Dann steckt sie den Rahmen ab, in dem
+          alle übrigen Karten liegen müssen. Ohne Häkchen gilt sie als farblos.
+          Das Bild wird im Browser auf Kartengrösse verkleinert und bleibt bei
+          der Karte gespeichert.
         </p>
       </div>
     </div>

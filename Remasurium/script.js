@@ -164,6 +164,8 @@ const els = {
   customCardModal: document.getElementById("customCardModal"),
   customCardCloseBtn: document.getElementById("customCardCloseBtn"),
   customCardName: document.getElementById("customCardName"),
+  customCardType: document.getElementById("customCardType"),
+  customCardColors: document.getElementById("customCardColors"),
   customCardFile: document.getElementById("customCardFile"),
   customCardPreview: document.getElementById("customCardPreview"),
   customCardStatus: document.getElementById("customCardStatus"),
@@ -975,7 +977,13 @@ function createDetailsHtml(card, prints, context) {
     card.card_faces?.map((entry) => entry.oracle_text || "").filter(Boolean).join("\n\n") ||
     "Kein Oracle Text vorhanden.";
   const cardName = face?.name || card.name;
-  const typeLine = face?.type_line || card.type_line || (eigene ? t(EIGENE_SET) : "Unbekannter Typ");
+  // Bei einer eigenen Karte steht dort dasselbe Wort, unter dem sie im
+  // Deck einsortiert ist, damit beides zusammenpasst.
+  const typeLine = eigene
+    ? card.type_line
+      ? t(typKategorie(card.type_line))
+      : t(EIGENE_SET)
+    : face?.type_line || card.type_line || "Unbekannter Typ";
   const canFlip =
     hasFaces &&
     card.card_faces.every((entry) => Boolean(entry.image_uris?.normal || entry.image_uris?.large || entry.image_uris?.small));
@@ -1011,7 +1019,10 @@ function createDetailsHtml(card, prints, context) {
           <div class="pill-row details-pills">
             ${
               eigene
-                ? `<span class="pill">${escapeHtml(t(EIGENE_SET))}</span>`
+                ? `<span class="pill">${escapeHtml(t(EIGENE_SET))}</span>
+                   <span class="pill">${escapeHtml(
+                     farbkuerzel(eigeneKarteMerkmale(card.id).colorIdentity)
+                   )}</span>`
                 : `<span class="pill">Set: ${escapeHtml(card.set_name || "?")}</span>
                    <span class="pill">Release: ${escapeHtml(card.released_at || "?")}</span>
                    <span class="pill">Rarity: ${escapeHtml(card.rarity || "?")}</span>`
@@ -1745,7 +1756,9 @@ function renderCommanderSlot() {
                <button type="button" id="demoteCommanderBtn" class="retro-button commander-star" title="${t("Als Commander entfernen")}" aria-label="${t("Als Commander entfernen")}">★</button>
                <button type="button" id="removeCommanderBtn" class="retro-button">Karte entfernen</button>
              </div>`
-          : ""
+          : `<div class="button-row">
+               <button type="button" id="customCommanderBtn" class="retro-button">Eigener Commander</button>
+             </div>`
       }
     </div>
   `;
@@ -1763,6 +1776,11 @@ function renderCommanderSlot() {
   const versionBtn = els.commanderSlot.querySelector("#commanderVersionBtn");
   if (versionBtn) {
     versionBtn.addEventListener("click", () => openCommanderVersionPicker(commander));
+  }
+
+  const eigenerBtn = els.commanderSlot.querySelector("#customCommanderBtn");
+  if (eigenerBtn) {
+    eigenerBtn.addEventListener("click", () => openEigeneKarteModal("commander"));
   }
 }
 
@@ -2129,6 +2147,24 @@ function renderDeckQueries(entries, note) {
 // Die Vorschläge richten sich nach dem Commander: Ein Deck darf nur
 // Karten seiner Farbidentität enthalten, deshalb steckt id<= in jeder
 // Abfrage. Dazu kommt sein Kreaturentyp als Stammes-Vorschlag.
+// Ein Deck darf nur Karten der Farbidentität seines Commanders führen,
+// deshalb steckt id<= in jeder Abfrage.
+function vorschlaegeZuIdentitaet(identitaet) {
+  const letters = (identitaet || []).join("").toLowerCase();
+  const identity = letters ? `id<=${letters}` : "id:colorless";
+  const label = letters ? letters.toUpperCase() : "farblos";
+  return {
+    identity,
+    label,
+    entries: [
+      { query: `${identity} t:creature`, label: `Kreaturen ${label}` },
+      { query: `${identity} t:instant or ${identity} t:sorcery`, label: `Spells ${label}` },
+      { query: `${identity} o:"draw a card"`, label: "Kartenziehen" },
+      { query: `${identity} o:"add {c}" t:land`, label: "Länder" }
+    ]
+  };
+}
+
 async function updateDeckQueries() {
   const commander = state.activeDeck?.commander;
 
@@ -2138,11 +2174,14 @@ async function updateDeckQueries() {
     return;
   }
 
-  // Eine eigene Karte hat keine Farbidentität, auf die sich Vorschläge
-  // zuschneiden liessen. Sie bekommt deshalb die allgemeinen.
+  // Eine eigene Karte sagt ihre Farbidentität selbst, dafür braucht es
+  // Scryfall nicht. Einen Kreaturentyp hat sie dagegen nicht.
   if (istEigeneKarte(commander.id)) {
     state.commanderCard = null;
-    renderDeckQueries(DEFAULT_DECK_QUERIES, "Klick auf eine Karte öffnet ihre Details.");
+    const { entries, label } = vorschlaegeZuIdentitaet(
+      eigeneKarteMerkmale(commander.id).colorIdentity
+    );
+    renderDeckQueries(entries, `Vorschläge passend zu ${commander.name} (${label}).`);
     return;
   }
 
@@ -2150,16 +2189,7 @@ async function updateDeckQueries() {
     const card = await loadCommanderCard(commander.id);
     state.commanderCard = card;
 
-    const letters = (card.color_identity || []).join("").toLowerCase();
-    const identity = letters ? `id<=${letters}` : "id:colorless";
-    const label = letters ? letters.toUpperCase() : "farblos";
-
-    const entries = [
-      { query: `${identity} t:creature`, label: `Kreaturen ${label}` },
-      { query: `${identity} t:instant or ${identity} t:sorcery`, label: `Spells ${label}` },
-      { query: `${identity} o:"draw a card"`, label: "Kartenziehen" },
-      { query: `${identity} o:"add {c}" t:land`, label: "Länder" }
-    ];
+    const { entries, label, identity } = vorschlaegeZuIdentitaet(card.color_identity || []);
 
     // Kreaturentypen stehen hinter dem Gedankenstrich der Typzeile.
     const subtypes = (card.type_line || "").split("—")[1]?.trim().split(/\s+/) || [];
@@ -2367,11 +2397,7 @@ async function ensureLegality(ids) {
   // Eigene Karten kennt Scryfall nicht. Ihr Eintrag entsteht hier, damit
   // sie gar nicht erst in die Abfrage geraten.
   const bekannte = [...new Set(ids)].filter(Boolean);
-  for (const id of bekannte) {
-    if (istEigeneKarte(id)) {
-      merkeEigeneKarteInfo(id);
-    }
-  }
+  merkeEigeneKarten(bekannte);
   // Nachgefragt wird für unbekannte Karten und für alle, deren Preis
   // älter als einen Tag ist. Die übrigen Angaben stehen dann schon.
   const fehlende = bekannte.filter(
@@ -2561,9 +2587,40 @@ const EIGENE_BILD_BREITE = 488;
 // Obergrenze für die fertige Data-URL, also für das, was gespeichert wird.
 // Wird sie überschritten, sinkt die Qualität stufenweise.
 const EIGENE_BILD_GRENZE = 300 * 1024;
+const EIGENE_TYPEN = CARD_TYPES.map((eintrag) => eintrag.key.toLowerCase());
+const EIGENE_FARBEN = ["W", "U", "B", "R", "G"];
 
 function istEigeneKarte(id) {
   return String(id || "").startsWith(EIGENE_VORSATZ);
+}
+
+// Typ und Farbidentität stehen in der Kennung selbst:
+//   custom-<typ>-<farben>-<zufall>, etwa custom-creature-wu-a1b2...
+// Beides liesse sich sonst nirgends unterbringen, denn Collection und
+// Deck speichern je Karte nur Name, Set und Bild. In der Kennung reisen
+// sie ohne neue Spalte überall mit, auch in die Cloud, und jedes Gerät
+// liest sie ohne Nachfrage wieder heraus.
+const EIGENE_OHNE_TYP = "x";
+const EIGENE_FARBLOS = "c";
+
+function eigeneKarteKennung(typ, farben) {
+  const typTeil = EIGENE_TYPEN.includes(typ) ? typ : EIGENE_OHNE_TYP;
+  const farbTeil = farben.length ? farben.join("").toLowerCase() : EIGENE_FARBLOS;
+  return `${EIGENE_VORSATZ}${typTeil}-${farbTeil}-${crypto.randomUUID()}`;
+}
+
+function eigeneKarteMerkmale(id) {
+  const [typ, farben] = String(id || "").slice(EIGENE_VORSATZ.length).split("-");
+  // Eigene Karten aus der Zeit vor dieser Erweiterung tragen nur die
+  // Zufallskennung. Sie bleiben typlos und farblos, so wie sie angelegt
+  // wurden. Eine Verwechslung ist ausgeschlossen, weil der erste Teil
+  // einer Zufallskennung immer acht Hexadezimalzeichen sind.
+  const bekannt = typ === EIGENE_OHNE_TYP || EIGENE_TYPEN.includes(typ);
+  return {
+    typeLine: bekannt && typ !== EIGENE_OHNE_TYP ? typ[0].toUpperCase() + typ.slice(1) : "",
+    colorIdentity:
+      bekannt && /^[wubrg]+$/.test(farben || "") ? farben.toUpperCase().split("") : []
+  };
 }
 
 // Bringt eine eigene Karte in die Form, die der Rest des Programms von
@@ -2575,7 +2632,7 @@ function eigeneKarteAus(eintrag) {
     ...eintrag,
     set_name: eintrag.set_name || EIGENE_SET,
     released_at: eintrag.released_at ?? null,
-    type_line: "",
+    type_line: eigeneKarteMerkmale(eintrag.id).typeLine,
     oracle_text: "",
     image: bild,
     image_uris: bild ? { small: bild, normal: bild, large: bild, art_crop: bild } : undefined,
@@ -2586,8 +2643,8 @@ function eigeneKarteAus(eintrag) {
   };
 }
 
-function eigeneKarte(name, bild) {
-  return eigeneKarteAus({ id: `${EIGENE_VORSATZ}${crypto.randomUUID()}`, name, image: bild });
+function eigeneKarte(name, bild, typ, farben) {
+  return eigeneKarteAus({ id: eigeneKarteKennung(typ, farben), name, image: bild });
 }
 
 // Eigene Karten bekommen ihren Eintrag im Kartenspeicher von Hand:
@@ -2599,16 +2656,25 @@ function merkeEigeneKarteInfo(id) {
   if (cardInfoCache.has(id)) {
     return;
   }
+  const { typeLine, colorIdentity } = eigeneKarteMerkmale(id);
   cardInfoCache.set(id, {
     legality: "unknown",
-    typeLine: "",
-    colorIdentity: [],
+    typeLine,
+    colorIdentity,
     manaCost: "",
     cmc: null,
     price: null,
     pt: Date.now(),
     t: Date.now()
   });
+}
+
+function merkeEigeneKarten(ids) {
+  for (const id of ids) {
+    if (id && istEigeneKarte(id)) {
+      merkeEigeneKarteInfo(id);
+    }
+  }
 }
 
 // Verkleinert ein hochgeladenes Bild auf Kartengrösse und gibt es als
@@ -2653,11 +2719,24 @@ function renderEigeneKarteVorschau() {
     : `<span class="small-note">${escapeHtml(t("Noch kein Bild gewählt."))}</span>`;
 }
 
+// Die angekreuzten Farben in WUBRG-Reihenfolge, wie sie im Markup stehen.
+function eigeneKarteFarben() {
+  return [...els.customCardColors.querySelectorAll("input[type=checkbox]")]
+    .filter((feld) => feld.checked)
+    .map((feld) => feld.value);
+}
+
 function openEigeneKarteModal(ziel) {
   eigeneKarteEntwurf.ziel = ziel;
   eigeneKarteEntwurf.bild = null;
   els.customCardName.value = "";
   els.customCardFile.value = "";
+  els.customCardType.value = "";
+  for (const feld of els.customCardColors.querySelectorAll("input[type=checkbox]")) {
+    feld.checked = false;
+  }
+  els.customCardSaveBtn.textContent =
+    ziel === "commander" ? t("Als Commander anlegen") : t("Karte anlegen");
   renderEigeneKarteVorschau();
   setEigeneKarteStatus(t("Wähle ein Bild aus."));
   openModal(els.customCardModal);
@@ -2699,11 +2778,18 @@ async function eigeneKarteAnlegen() {
 
   const karte = eigeneKarte(
     els.customCardName.value.trim().slice(0, 80) || t("Eigene Karte"),
-    eigeneKarteEntwurf.bild
+    eigeneKarteEntwurf.bild,
+    els.customCardType.value,
+    eigeneKarteFarben()
   );
   merkeEigeneKarteInfo(karte.id);
 
-  if (eigeneKarteEntwurf.ziel === "deck") {
+  if (eigeneKarteEntwurf.ziel === "commander") {
+    // Der Commander steht nicht zusätzlich in der Kartenliste, deshalb
+    // geht die Karte direkt auf den Platz. Der Stern holt sie später
+    // wieder in die Liste zurück.
+    await setCommander({ ...karte, art: karte.image });
+  } else if (eigeneKarteEntwurf.ziel === "deck") {
     await addCardToDeck(karte);
   } else {
     await toggleCollection(karte);
@@ -3325,6 +3411,13 @@ function renderDeckEditor() {
 function applyDeckResult(result) {
   state.activeDeck = result.deck;
   state.activeDeckCards = result.cards || [];
+  // Eigene Karten tragen Typ und Farben in ihrer Kennung, dafür braucht
+  // es kein Netz. Der Eintrag entsteht deshalb sofort und nicht erst mit
+  // der Regelprüfung, sonst stünden sie bis dahin unter "Sonstige".
+  merkeEigeneKarten([
+    state.activeDeck?.commander?.id,
+    ...state.activeDeckCards.map((karte) => karte.id)
+  ]);
   renderDeckEditor();
 }
 

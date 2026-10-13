@@ -310,12 +310,20 @@ and the rest is skipped.
 
 Not every card you want to play exists on Scryfall. A proxy, a card you
 drew yourself, something from a homebrew set. "Custom card" sits in the
-collection panel and in the deck toolbar, and both open the same window:
-pick an image, give it a name, done.
+collection panel and in the deck toolbar, and "Custom commander" sits in
+the commander slot while no commander is picked. All three open the same
+window: pick an image, give it a name, choose a type and a colour
+identity. The commander button puts the finished card straight onto the
+commander slot.
 
-A custom card is an image with a name and nothing else. There is no Oracle
-text, no type line, no mana cost and no price, so the detail view drops
-those sections instead of filling them with question marks.
+There is still no Oracle text, no mana cost and no price, so the detail
+view drops those sections instead of filling them with question marks.
+The two things you can set are the ones the rest of the app actually
+needs. The type decides which heading the card sits under in the deck.
+The colour identity decides what fits: as a normal card it has to fit
+inside the commander's colours, and as the commander it sets that frame
+for everything else. It also steers the search suggestions and which
+basics "Optimize lands" offers. Ticking nothing means colourless.
 
 The image is shrunk in your browser to 488 pixels wide, the same size
 Scryfall serves as "normal", and stored as a data URL in the very field
@@ -326,22 +334,37 @@ with one. Expect roughly 100 kB per card. Without an account the browser's
 storage sets the ceiling, so a few dozen cards is the realistic order of
 magnitude, not a few hundred.
 
-The id of a custom card starts with `custom-`. Every part of the app reads
-that prefix as "there is nothing to look up here", which decides how the
-rest behaves:
+The id of a custom card carries everything that is not a name or a
+picture:
+
+```
+custom-creature-wu-b56eca25-6bbc-4b06-be92-93b694017653
+       └ type    └ colours
+```
+
+The prefix `custom-` tells every part of the app that there is nothing to
+look up here. Type and colours ride along in the id because a card row
+stores only a name, a set and an image, and there was no field left for
+them. This way they need no column of their own, they reach the cloud and
+every other device for free, and any browser can read them back without
+asking anyone. Cards made before this existed are plain `custom-<random>`
+and stay typeless and colourless.
+
+What follows from all that:
 
 - The rules check counts them towards the 100 cards but never calls them
-  banned, not legal, or outside the commander's colours.
-- They carry no colour identity, so they fit under any commander.
+  banned or not legal. Colours it does check, in both directions.
 - They stay out of the mana curve and out of the colour split, since they
-  have no mana value and no mana symbols.
+  have no mana value and no mana symbols. The colour identity is a
+  separate thing from the mana symbols a card costs.
 - They have no price and are named as such in the sums, the same way a
   card missing from Cardmarket is.
-- They group under "Other" in the deck, because they have no type line.
+- They group under the type you picked, or under "Other" if you picked
+  none.
 - A deck may hold any number of copies. What a card you made yourself is
   worth is yours to decide, so the singleton rule stays out of it.
 - A custom card can be the commander. Its own picture then stands for the
-  deck in the overview.
+  deck in the overview, and its colours become the deck's frame.
 
 Exporting a deck writes the name of a custom card like any other. Reading
 that list back in will not find it again, because the name means nothing

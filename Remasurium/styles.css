@@ -1688,6 +1688,36 @@ body.is-splitting {
   border-radius: 8px;
 }
 
+/* Die fünf Farben stehen nebeneinander und brechen auf schmalen
+   Fenstern um. */
+.custom-card-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+}
+
+.custom-card-colors label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.modal-body select {
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--ink);
+  background: #f4f0e7;
+  border: 2px solid;
+  border-color: #8b867c #ffffff #ffffff #8b867c;
+  box-shadow: inset 1px 1px 0 rgba(0, 0, 0, 0.2);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.9rem;
+}
+
 .modal-body input[type="file"] {
   width: 100%;
   padding: 8px 10px;

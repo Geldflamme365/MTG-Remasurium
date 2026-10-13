@@ -233,6 +233,15 @@ const EN = {
   "z.B. Mein Proxy": "e.g. my proxy",
   "Bild": "Image",
   "Karte anlegen": "Create card",
+  "Eigener Commander": "Custom commander",
+  "Als Commander anlegen": "Create as commander",
+  "Kartentyp": "Card type",
+  "Farbidentität": "Colour identity",
+  "Weiss": "White",
+  "Blau": "Blue",
+  "Schwarz": "Black",
+  "Rot": "Red",
+  "Grün": "Green",
   "Vorschau": "Preview",
   "Noch kein Bild gewählt.": "No image chosen yet.",
   "Wähle ein Bild aus.": "Pick an image.",
@@ -244,8 +253,8 @@ const EN = {
     "A custom card has no other printings.",
   "Selbst angelegt, darum ohne Oracle-Text, Preis und weitere Ausgaben.":
     "Made by you, so there is no Oracle text, no price and no other printings.",
-  "Eine eigene Karte ist ein Bild mit einem Namen. Oracle-Text, Preis und andere Ausgaben gibt es dazu nicht, und die Regelprüfung lässt sie in Ruhe. Das Bild wird im Browser auf Kartengrösse verkleinert und bleibt bei der Karte gespeichert.":
-    "A custom card is an image with a name. There is no Oracle text, no price and no other printings, and the rules check leaves it alone. The image is shrunk to card size in your browser and stays with the card.",
+  "Oracle-Text, Preis und andere Ausgaben gibt es zu einer eigenen Karte nicht, und die Regelprüfung nennt sie nie verboten. Der Typ bestimmt, unter welcher Überschrift sie im Deck steht. Die Farbidentität zählt, sobald die Karte Commander ist: Dann steckt sie den Rahmen ab, in dem alle übrigen Karten liegen müssen. Ohne Häkchen gilt sie als farblos. Das Bild wird im Browser auf Kartengrösse verkleinert und bleibt bei der Karte gespeichert.":
+    "A custom card has no Oracle text, no price and no other printings, and the rules check never calls it banned. The type decides which heading it sits under in the deck. The colour identity matters once the card is the commander: it then sets the frame every other card has to fit into. With nothing ticked it counts as colourless. The image is shrunk to card size in your browser and stays with the card.",
 
   // Länder optimieren
   "Länder optimieren": "Optimize lands",

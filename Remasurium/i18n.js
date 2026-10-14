@@ -204,6 +204,18 @@ const EN = {
   "Oberste Karte umdrehen": "Turn the top card over",
   "Wieder zugedeckt.": "Face down again.",
   "Kein Treffer.": "No match.",
+  "Spielstein erzeugen": "Create token",
+  "Spielstein erzeugt: {name}.": "Token created: {name}.",
+  "{name} verschwindet.": "{name} ceases to exist.",
+  "Dieses Deck braucht keine Spielsteine.": "This deck needs no tokens.",
+  "Spielsteine werden geladen...": "Loading the tokens...",
+  "Spielsteine, die das Deck braucht": "Tokens the deck needs",
+  "Aus den Karten selbst: Scryfall nennt zu jeder Karte, welche Spielsteine sie erzeugt. Im Playtester lassen sie sich mit einem Rechtsklick aufs Spielfeld erstellen.":
+    "From the cards themselves: Scryfall lists what each one creates. In the playtester a right-click on the table makes them.",
+  "In der Reihenfolge der Bibliothek, oberste Karte zuerst. Ein Klick legt sie ins Spiel, E, G, L und H schicken sie woanders hin.":
+    "In library order, top card first. A click puts it into play; E, G, L and H send it elsewhere.",
+  "Zuletzt dorthin gewandert zuerst. Ein Klick legt die Karte ins Spiel, E, G, L und H schicken sie woanders hin.":
+    "Most recently put there first. A click puts the card into play; E, G, L and H send it elsewhere.",
   "Kartenname": "Card name",
   "Oberste X Karten ansehen": "Peek at the top X cards",
   "Unterste X Karten ansehen": "Peek at the bottom X cards",
@@ -223,10 +235,6 @@ const EN = {
     "Just looking, the order stays as it is.",
   "{count} Karte in den Friedhof.": "{count} card to the graveyard.",
   "{count} Karten in den Friedhof.": "{count} cards to the graveyard.",
-  "In der Reihenfolge der Bibliothek, oberste Karte zuerst. Ein Klick nimmt sie auf die Hand.":
-    "In library order, top card first. A click takes it to your hand.",
-  "Zuletzt dorthin gewandert zuerst. Ein Klick nimmt die Karte auf die Hand.":
-    "Most recently put there first. A click takes the card to your hand.",
   "Die Karte liess sich nicht laden.": "The card could not be loaded.",
   "Die Bibliothek ist leer.": "The library is empty.",
   "Zug {turn}.": "Turn {turn}.",

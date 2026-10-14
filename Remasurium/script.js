@@ -172,6 +172,8 @@ const els = {
   playtestTurnBtn: document.getElementById("playtestTurnBtn"),
   playtestResetBtn: document.getElementById("playtestResetBtn"),
   manaCurve: document.getElementById("manaCurve"),
+  deckTokens: document.getElementById("deckTokens"),
+  deckTokenCount: document.getElementById("deckTokenCount"),
   manaColors: document.getElementById("manaColors"),
   openLandsBtn: document.getElementById("openLandsBtn"),
   landsModal: document.getElementById("landsModal"),
@@ -2432,7 +2434,7 @@ const CARD_INFO_MAX = 4000;
 // Hochzählen, sobald ein Feld dazukommt. Sonst behalten alte Einträge ihre
 // frischen Preise, das neue Feld bleibt aber für immer leer, weil nur
 // unbekannte Karten und veraltete Preise nachgefragt werden.
-const CARD_INFO_VERSION = 2;
+const CARD_INFO_VERSION = 3;
 // Preise sind das Einzige, was sich täglich ändert. Sie bekommen deshalb
 // eine eigene, kurze Haltbarkeit und einen eigenen Zeitstempel.
 const PRICE_TTL = 24 * 60 * 60 * 1000;
@@ -2558,6 +2560,7 @@ function ladeCardInfo() {
       colorIdentity: eintrag.colorIdentity,
       manaCost: eintrag.manaCost,
       cmc: eintrag.cmc ?? null,
+      tokens: eintrag.tokens || [],
       price: preisFrisch ? eintrag.price : null,
       pt: preisFrisch ? eintrag.pt : 0,
       t: eintrag.t
@@ -2633,6 +2636,12 @@ async function ensureLegality(ids) {
         // Bei doppelseitigen Karten steht oben keine Manakosten, nur je Seite.
         manaCost: card.mana_cost || card.card_faces?.[0]?.mana_cost || "",
         cmc: typeof card.cmc === "number" ? card.cmc : null,
+        // Scryfall nennt unter all_parts, was eine Karte an Spielsteinen
+        // erzeugt. Mehr als Kennung und Name braucht es hier nicht; das
+        // Bild wird erst geholt, wenn die Liste wirklich gezeigt wird.
+        tokens: (card.all_parts || [])
+          .filter((teil) => teil.component === "token")
+          .map((teil) => ({ id: teil.id, name: teil.name })),
         price: preisAusScryfall(card),
         pt: Date.now(),
         t: Date.now()
@@ -2646,6 +2655,7 @@ async function ensureLegality(ids) {
           typeLine: "",
           colorIdentity: null,
           manaCost: "",
+          tokens: [],
           price: null,
           pt: Date.now(),
           t: Date.now()
@@ -2868,6 +2878,7 @@ function merkeEigeneKarteInfo(id) {
     colorIdentity,
     manaCost: "",
     cmc: null,
+    tokens: [],
     price: null,
     pt: Date.now(),
     t: Date.now()
@@ -3304,6 +3315,9 @@ function playtestNeu() {
   playtest.graveyard = [];
   playtest.exile = [];
   playtest.aufgedecktUid = null;
+  // Die Bilder der Spielsteine im Voraus holen, damit ein frisch
+  // erzeugter Stein nicht erst leer auf dem Feld liegt.
+  ensureTokenKarten(deckTokenRefs()).catch(() => {});
   playtest.commander = commander
     ? { uid: `cmd#${commander.id}`, id: commander.id, name: commander.name, image: commander.image }
     : null;
@@ -3361,6 +3375,12 @@ function playtestEntnehmen(uid) {
 // nächstes gezogen", beim Friedhof "zuletzt dorthin gewandert".
 function playtestEinfuegen(stueck, zone, optionen = {}) {
   if (!stueck) {
+    return;
+  }
+  // Ein Spielstein hört auf zu existieren, sobald er das Spielfeld
+  // verlässt. Er wird deshalb nirgends eingefügt, sondern fällt weg -
+  // egal ob gezogen, über ein Tastenkürzel oder aus dem Menü heraus.
+  if (stueck.istToken && zone !== "board") {
     return;
   }
   if (zone === "commander") {
@@ -3490,7 +3510,7 @@ function renderPlaytest() {
     const top = Math.round((stueck.yAnteil ?? 0) * nutzbarH);
     els.playtestBoard.insertAdjacentHTML(
       "beforeend",
-      `<div class="playtest-card is-board${stueck.tapped ? " is-tapped" : ""}" data-uid="${escapeHtml(
+      `<div class="playtest-card is-board${stueck.tapped ? " is-tapped" : ""}${stueck.istToken ? " is-token" : ""}" data-uid="${escapeHtml(
         stueck.uid
       )}" style="left: ${left}px; top: ${top}px" title="${escapeHtml(stueck.name)}">
         ${
@@ -3528,7 +3548,10 @@ function setPlaytestHinweis(text, deckName = state.activeDeck?.name || "") {
 // Beim Durchsuchen der Bibliothek lässt sich eine davon anklicken und
 // wandert dann auf die Hand; beim blossen Ansehen passiert nichts.
 
-let kartenRasterAuswahl = null;
+// Das gerade gezeigte Raster. Wählbare merken sich ihre Zone, damit sie
+// sich nach einem Zug neu zeichnen lassen: Wer im Raster eine Karte
+// wegschickt, soll sie dort verschwinden sehen.
+let kartenRaster = null;
 
 // Filtert das Raster nach Kartenname. Gezeichnet wird nur einmal, das
 // Suchen blendet danach bloss aus; so bleibt die Reihenfolge erhalten.
@@ -3543,15 +3566,7 @@ function filterePlaytestKarten() {
   els.playtestCardsEmpty.hidden = treffer > 0 || !suche;
 }
 
-function openPlaytestKarten(titel, stuecke, { hinweis = "", waehlbar = false } = {}) {
-  kartenRasterAuswahl = waehlbar ? (uid) => uid : null;
-  els.playtestCardsTitle.textContent = titel;
-  els.playtestCardsNote.textContent = hinweis;
-  // Gesucht wird dort, wo man etwas holen will. Beim blossen Ansehen
-  // von ein paar Karten wäre ein Suchfeld nur im Weg.
-  els.playtestCardsSearchRow.hidden = !waehlbar;
-  els.playtestCardsSearch.value = "";
-  els.playtestCardsEmpty.hidden = true;
+function zeichneKartenRaster(stuecke, waehlbar) {
   els.playtestCardsGrid.innerHTML = stuecke.length
     ? stuecke
         .map(
@@ -3569,10 +3584,33 @@ function openPlaytestKarten(titel, stuecke, { hinweis = "", waehlbar = false } =
         )
         .join("")
     : `<div class="empty-state">${escapeHtml(t("Keine Karten."))}</div>`;
+}
+
+function openPlaytestKarten(titel, stuecke, { hinweis = "", waehlbar = false, zone = null } = {}) {
+  kartenRaster = { waehlbar, zone };
+  els.playtestCardsTitle.textContent = titel;
+  els.playtestCardsNote.textContent = hinweis;
+  // Gesucht wird dort, wo man etwas holen will. Beim blossen Ansehen
+  // von ein paar Karten wäre ein Suchfeld nur im Weg.
+  els.playtestCardsSearchRow.hidden = !waehlbar;
+  els.playtestCardsSearch.value = "";
+  els.playtestCardsEmpty.hidden = true;
+  zeichneKartenRaster(stuecke, waehlbar);
   openModal(els.playtestCardsModal);
-  if (waehlbar) {
-    els.playtestCardsSearch.focus();
+  // Das Suchfeld bekommt bewusst keinen Fokus: Sonst landeten E, G, L
+  // und H als Text darin, statt die Karte unter dem Zeiger zu bewegen.
+}
+
+// Zeichnet ein wählbares Raster mit dem aktuellen Inhalt seiner Zone neu
+// und behält dabei den Suchtext.
+function aktualisiereKartenRaster() {
+  if (!kartenRaster?.zone || !els.playtestCardsModal.classList.contains("open")) {
+    return;
   }
+  const suchtext = els.playtestCardsSearch.value;
+  zeichneKartenRaster(PT_ZONEN[kartenRaster.zone].liste(), kartenRaster.waehlbar);
+  els.playtestCardsSearch.value = suchtext;
+  filterePlaytestKarten();
 }
 
 // --- Kontextmenü ----------------------------------------------------------
@@ -3712,8 +3750,9 @@ function bibliothekMillen(anzahl) {
 
 function oeffneBibliothekssuche() {
   openPlaytestKarten(t("Bibliothek durchsuchen"), playtest.library, {
-    hinweis: t("In der Reihenfolge der Bibliothek, oberste Karte zuerst. Ein Klick nimmt sie auf die Hand."),
-    waehlbar: true
+    hinweis: t("In der Reihenfolge der Bibliothek, oberste Karte zuerst. Ein Klick legt sie ins Spiel, E, G, L und H schicken sie woanders hin."),
+    waehlbar: true,
+    zone: "library"
   });
 }
 
@@ -3722,8 +3761,9 @@ function oeffneBibliothekssuche() {
 // liegenden Karten nicht mehr heran.
 function oeffneAblage(zone) {
   openPlaytestKarten(t(PT_ZONEN[zone].label), PT_ZONEN[zone].liste(), {
-    hinweis: t("Zuletzt dorthin gewandert zuerst. Ein Klick nimmt die Karte auf die Hand."),
-    waehlbar: true
+    hinweis: t("Zuletzt dorthin gewandert zuerst. Ein Klick legt die Karte ins Spiel, E, G, L und H schicken sie woanders hin."),
+    waehlbar: true,
+    zone
   });
 }
 
@@ -3741,6 +3781,44 @@ function obersteAnsehen() {
   fetchJson(`https://api.scryfall.com/cards/${encodeURIComponent(oberste.id)}`)
     .then(selectDeckSearchCard)
     .catch(() => setPlaytestHinweis(t("Die Karte liess sich nicht laden.")));
+}
+
+// --- Spielsteine im Playtester -------------------------------------------
+
+let tokenZaehler = 0;
+
+function playtestTokenErzeugen(ref) {
+  const karte = tokenCache.get(ref.id);
+  tokenZaehler += 1;
+  playtestEinfuegen(
+    {
+      uid: `token#${tokenZaehler}`,
+      id: ref.id,
+      name: ref.name,
+      image: karte?.image || null,
+      istToken: true
+    },
+    "board",
+    // Leicht gestreut, damit mehrere Steine nicht genau aufeinander
+    // liegen und sich einzeln greifen lassen.
+    { xAnteil: 0.3 + Math.random() * 0.35, yAnteil: 0.25 + Math.random() * 0.35 }
+  );
+  renderPlaytest();
+  setPlaytestHinweis(t("Spielstein erzeugt: {name}.", { name: ref.name }));
+}
+
+// Das Menü des Spielfelds. Bisher steht dort nur das Erzeugen von
+// Spielsteinen; die Liste kommt aus den Karten des Decks.
+function spielfeldMenuEintraege() {
+  const refs = deckTokenRefs();
+  return [
+    {
+      label: "Spielstein erzeugen",
+      unter: refs.length
+        ? refs.map((ref) => ({ label: ref.name, aktion: () => playtestTokenErzeugen(ref) }))
+        : [{ label: "Dieses Deck braucht keine Spielsteine.", aktion: () => {} }]
+    }
+  ];
 }
 
 // Die Einträge des Bibliotheksmenüs.
@@ -3963,10 +4041,12 @@ function playtestZeigerEnde(event) {
   } else {
     playtestEinfuegen(stueck, ziel);
     setPlaytestHinweis(
-      t("{name} nach {zone}.", {
-        name: stueck.name,
-        zone: ziel === "commander" ? t("Commander") : t(PT_ZONEN[ziel].label)
-      })
+      stueck.istToken
+        ? t("{name} verschwindet.", { name: stueck.name })
+        : t("{name} nach {zone}.", {
+            name: stueck.name,
+            zone: ziel === "commander" ? t("Commander") : t(PT_ZONEN[ziel].label)
+          })
     );
   }
   renderPlaytest();
@@ -4072,10 +4152,107 @@ function deckStatistik() {
   return { ...manaKurve(fuerKurve), farben: deckPips() };
 }
 
+// --- Spielsteine ----------------------------------------------------------
+//
+// Welche Spielsteine ein Deck braucht, steht bei den Karten selbst:
+// Scryfall nennt sie unter all_parts. Gesammelt wird über das ganze Deck,
+// den Commander eingerechnet; doppelte fallen weg.
+
+const tokenCache = new Map();
+
+function deckTokenRefs() {
+  const commander = state.activeDeck?.commander;
+  const ids = [...state.activeDeckCards.map((karte) => karte.id), ...(commander ? [commander.id] : [])];
+  const gefunden = new Map();
+  for (const id of ids) {
+    for (const token of cardInfoCache.get(id)?.tokens || []) {
+      if (token.id && !gefunden.has(token.id)) {
+        gefunden.set(token.id, token);
+      }
+    }
+  }
+  return [...gefunden.values()].sort((a, b) => a.name.localeCompare(b.name, "de"));
+}
+
+// Holt Bild und Typzeile der Spielsteine nach. Einmal je Sitzung reicht,
+// diese Angaben ändern sich nicht.
+async function ensureTokenKarten(refs) {
+  const fehlende = refs.filter((ref) => !tokenCache.has(ref.id)).map((ref) => ref.id);
+  if (!fehlende.length) {
+    return;
+  }
+  for (let i = 0; i < fehlende.length; i += 75) {
+    const teil = fehlende.slice(i, i + 75);
+    const response = await scryfallFetch("https://api.scryfall.com/cards/collection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifiers: teil.map((id) => ({ id })) })
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    for (const karte of data.data || []) {
+      tokenCache.set(karte.id, {
+        id: karte.id,
+        name: karte.name,
+        typeLine: karte.type_line || "",
+        image: getCardPreviewUrl(karte) || null
+      });
+    }
+  }
+}
+
+// Die Liste wird oft neu gezeichnet; ohne diesen Vergleich flackerte sie
+// bei jedem Rendern des Deckeditors.
+let letzteTokenListe = null;
+
+async function renderDeckTokens() {
+  const refs = deckTokenRefs();
+  const kennung = refs.map((ref) => ref.id).join(",");
+  if (kennung === letzteTokenListe) {
+    return;
+  }
+  letzteTokenListe = kennung;
+
+  els.deckTokenCount.textContent = refs.length;
+  if (!refs.length) {
+    els.deckTokens.innerHTML = `<div class="empty-state">${escapeHtml(
+      t("Dieses Deck braucht keine Spielsteine.")
+    )}</div>`;
+    return;
+  }
+
+  els.deckTokens.innerHTML = `<div class="empty-state">${escapeHtml(
+    t("Spielsteine werden geladen...")
+  )}</div>`;
+  try {
+    await ensureTokenKarten(refs);
+  } catch {
+    // Ohne Scryfall bleiben wenigstens die Namen stehen.
+  }
+  els.deckTokens.innerHTML = refs
+    .map((ref) => {
+      const karte = tokenCache.get(ref.id);
+      return `
+        <div class="deck-token" title="${escapeHtml(karte?.typeLine || ref.name)}">
+          ${
+            karte?.image
+              ? `<img src="${escapeHtml(karte.image)}" alt="${escapeHtml(ref.name)}" loading="lazy" />`
+              : ""
+          }
+          <span>${escapeHtml(ref.name)}</span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function renderDeckStats() {
   if (!state.activeDeck) {
     return;
   }
+  renderDeckTokens();
   const { balken, summe, anzahl, schnitt, farben } = deckStatistik();
 
   els.deckStatsSummary.textContent = anzahl
@@ -5107,11 +5284,19 @@ els.playtestView.addEventListener("pointerdown", playtestZeigerStart);
 // Rechtsklick auf die Bibliothek öffnet ihr Menü. Das eigene Menü des
 // Browsers tritt dafür zurück.
 els.playtestView.addEventListener("contextmenu", (event) => {
-  if (!playtest.laeuft || !els.playtestLibrary.contains(event.target)) {
+  if (!playtest.laeuft) {
     return;
   }
-  event.preventDefault();
-  zeigePlaytestMenu(event.clientX, event.clientY, bibliothekMenuEintraege());
+  // Die Bibliothek liegt innerhalb des Spielfelds, deshalb zuerst.
+  if (els.playtestLibrary.contains(event.target)) {
+    event.preventDefault();
+    zeigePlaytestMenu(event.clientX, event.clientY, bibliothekMenuEintraege());
+    return;
+  }
+  if (els.playtestBoard.contains(event.target)) {
+    event.preventDefault();
+    zeigePlaytestMenu(event.clientX, event.clientY, spielfeldMenuEintraege());
+  }
 });
 
 // Im Menü: ein Eintrag mit Untermenü klappt es auf, ein Eintrag mit
@@ -5196,7 +5381,12 @@ function playtestTastenZug(taste) {
   }
   ueberfahreneKarte = null;
   renderPlaytest();
-  setPlaytestHinweis(t("{name} nach {zone}.", { name: stueck.name, zone: t(PT_ZONEN[zone].label) }));
+  aktualisiereKartenRaster();
+  setPlaytestHinweis(
+    stueck.istToken && zone !== "board"
+      ? t("{name} verschwindet.", { name: stueck.name })
+      : t("{name} nach {zone}.", { name: stueck.name, zone: t(PT_ZONEN[zone].label) })
+  );
   return true;
 }
 
@@ -5213,15 +5403,24 @@ els.playtestCardsModal.addEventListener("click", (event) => {
 // dafür geöffnet wurde.
 els.playtestCardsGrid.addEventListener("click", (event) => {
   const karte = event.target.closest(".playtest-grid-card.is-waehlbar");
-  if (!karte || !kartenRasterAuswahl) {
+  if (!karte) {
     return;
   }
-  const stueck = playtestVerschiebe(karte.dataset.uid, "hand");
+  const stueck = playtestVerschiebe(karte.dataset.uid, "board");
   closeModal(els.playtestCardsModal);
   renderPlaytest();
   if (stueck) {
-    setPlaytestHinweis(t("{name} auf die Hand.", { name: stueck.name }));
+    setPlaytestHinweis(t("{name} nach {zone}.", { name: stueck.name, zone: t("Spielfeld") }));
   }
+});
+
+// Auch im Raster gelten die Tastenkürzel für die Karte unter dem Zeiger.
+els.playtestCardsGrid.addEventListener("pointerover", (event) => {
+  ueberfahreneKarte = event.target.closest(".playtest-grid-card")?.dataset.uid || null;
+});
+
+els.playtestCardsGrid.addEventListener("pointerleave", () => {
+  ueberfahreneKarte = null;
 });
 window.addEventListener("pointermove", playtestZeigerBewegung);
 window.addEventListener("pointerup", playtestZeigerEnde);

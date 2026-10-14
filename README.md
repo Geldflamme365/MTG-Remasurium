@@ -331,6 +331,17 @@ exile zone — carry a search field that filters by name as you type.
 Peeking at a few cards does not; there the order is the point. `Ctrl+F`
 opens the library search as well.
 
+Clicking a card in those grids puts it onto the battlefield. The `E`,
+`G`, `L` and `H` keys work there too, on whichever card you point at, so
+anywhere else is one key away. The grid redraws after a move, so the card
+you just sent away leaves it. The search field is deliberately not
+focused when the grid opens, or those keys would land in it as text.
+
+A right-click on the table itself opens **Create token** with every token
+the deck needs. The token appears on the battlefield with a dashed
+border, since it is not a card of the deck. Move it anywhere else — drag
+it, or use a key — and it simply ceases to exist, the way a token does.
+
 Drag a card from your hand or straight off the library onto the table and
 drop it where you want it. The card follows your pointer the whole way,
 and the place it came from stays visible but faded, so you can see what is
@@ -361,6 +372,12 @@ Under the deck sits a statistics panel. On top the mana curve: how many cards
 sit at each mana value, 0 through 7 and everything from 8 up in the last bar,
 with the average in the title bar. Lands are left out, since they have no cost
 and would drag the curve down; the commander counts in.
+
+Under both sits the list of tokens the deck needs. It is not typed by
+hand: Scryfall names, for every card, what it creates, and the list is
+the union of those over the whole deck with the commander counted in.
+Duplicates fall away, so a deck making Soldiers from four cards lists
+Soldier once.
 
 Below it the colour split of the mana costs, one bar per colour with its share.
 It counts coloured mana symbols, so a card costing `{2}{B}{G}` adds one to

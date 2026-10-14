@@ -278,7 +278,41 @@ the game survives an accidental refresh and can sit on a second screen
 next to the editor.
 
 The library is shuffled fresh, seven cards go to the hand, and the
-commander sits in its own zone next to the library, the same size.
+commander sits in its own zone next to the library, the same size. The
+graveyard sits to the right of your hand. Its title counts what is in it
+and opens the whole pile, since the zone itself only shows the card on
+top.
+
+The library shows a real card back, fetched from Scryfall like every
+other card image here. If that image cannot be loaded, a drawn stand-in
+takes its place so the pile stays visible.
+
+Dropping a card on a zone puts it in that zone: hand, battlefield,
+graveyard, library. The zone under your pointer lights up before you let
+go. Library and commander sit inside the battlefield, so they are asked
+first; the commander zone takes only the commander back, anything else
+dropped there lands on the battlefield.
+
+Right-clicking the library opens its menu:
+
+| Entry | What it does |
+| --- | --- |
+| Draw | One card to your hand |
+| Draw X cards | 1, 2, 3, 5, 7 or 10 at once |
+| Move top card to | Hand, battlefield, graveyard or the bottom |
+| Search library | Every card as a grid, in library order |
+| Shuffle library | |
+| Draw a random card | Not the top one, any of them |
+| Reveal the top card | Shows it; it stays where it is |
+| Peek at the top X cards | Look without changing the order |
+| Peek at the bottom X cards | Same from the other end |
+| Mill X cards | From the top into the graveyard |
+| Card actions | Look at the top card, or put it on the bottom |
+
+Every grid numbers its cards, 1 being the top one, so the order is
+readable and not just implied. Searching the library is the one grid you
+can click: a card goes to your hand. Peeking leaves everything alone.
+`Ctrl+F` opens the search as well.
 
 Drag a card from your hand or straight off the library onto the table and
 drop it where you want it. The card follows your pointer the whole way,
@@ -293,7 +327,8 @@ hand.
 | `D` | Draw a card |
 | `N` | New turn: untap everything, draw, turn counter up |
 | `Shift+N` | New game, shuffled again |
-| `Esc` | Close |
+| `Ctrl+F` | Search the library |
+| `Esc` | Close the menu, then the grid, then the playtester |
 
 Browsers keep `Ctrl+N` for themselves and hand it to the window, not the page,
 so `Shift+N` starts a new game instead. The buttons in the bottom bar do the

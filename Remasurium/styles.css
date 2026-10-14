@@ -707,14 +707,202 @@ body.is-playtest .desk {
   opacity: 0.3;
 }
 
+/* Hand und Friedhof teilen sich eine Reihe: die Hand nimmt den Platz,
+   der Friedhof steht rechts daneben in Zonenbreite. */
+.playtest-hand-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 146px;
+  align-items: stretch;
+  background: linear-gradient(180deg, #ece8de, #d7d2c8);
+  border-bottom: 2px solid #8d887e;
+}
+
 .playtest-hand {
   display: flex;
   gap: 8px;
   min-height: 176px;
   padding: 10px;
   overflow-x: auto;
-  background: linear-gradient(180deg, #ece8de, #d7d2c8);
-  border-bottom: 2px solid #8d887e;
+}
+
+.playtest-graveyard {
+  margin: 8px 10px 8px 0;
+}
+
+.playtest-zone-body {
+  display: grid;
+}
+
+/* Der Titel des Friedhofs öffnet den ganzen Stapel. */
+.playtest-graveyard .playtest-zone-title {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Die Zone unter dem Zeiger hebt sich beim Ziehen hervor. */
+.playtest-zone.is-ziel,
+.playtest-hand.is-ziel {
+  outline: 2px solid #ffd66b;
+  outline-offset: -2px;
+}
+
+/* Die Rückseite trägt das Bild und darunter einen gezeichneten Ersatz.
+   Fällt das Bild aus, tritt der Ersatz hervor; der Stapel bleibt dann
+   sichtbar, nur eben ohne Bild. */
+.playtest-card.is-back {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(160deg, #4b3a8f, #221545);
+  border: 2px solid #8f7fd0;
+  border-radius: 6px;
+}
+
+.playtest-card.is-back img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.playtest-back-ersatz {
+  display: none;
+  color: #f0e8ff;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.playtest-card.is-back.ohne-bild img {
+  display: none;
+}
+
+.playtest-card.is-back.ohne-bild .playtest-back-ersatz {
+  display: block;
+}
+
+/* Kontextmenü der Bibliothek, im Stil der übrigen Fenster. */
+.pt-menu {
+  position: fixed;
+  z-index: 4200;
+  min-width: 252px;
+  padding: 4px;
+  background: var(--window-2);
+  border: 2px solid;
+  border-color: var(--edge-light) var(--edge-darker) var(--edge-darker) var(--edge-light);
+  box-shadow: 3px 3px 0 rgba(4, 3, 14, 0.5);
+  font-size: 0.92rem;
+}
+
+.pt-menu[hidden] {
+  display: none;
+}
+
+.pt-menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.pt-menu-item > span:first-child {
+  flex: 1;
+}
+
+.pt-menu-item:hover {
+  color: #fff;
+  background: linear-gradient(180deg, #2f51d7, #10256f);
+}
+
+.pt-menu-kuerzel {
+  color: var(--muted);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.8rem;
+}
+
+.pt-menu-item:hover .pt-menu-kuerzel {
+  color: #d7deff;
+}
+
+.pt-menu-trenner {
+  height: 0;
+  margin: 4px 2px;
+  border-top: 1px solid #8b867c;
+  border-bottom: 1px solid #fff;
+}
+
+.pt-submenu {
+  position: absolute;
+  top: -4px;
+  left: 100%;
+  z-index: 1;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--window-2);
+  border: 2px solid;
+  border-color: var(--edge-light) var(--edge-darker) var(--edge-darker) var(--edge-light);
+  box-shadow: 3px 3px 0 rgba(4, 3, 14, 0.5);
+}
+
+.pt-submenu[hidden] {
+  display: none;
+}
+
+/* Kartenraster: Bibliothek durchsuchen, Karten ansehen, Friedhof. */
+.playtest-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 10px;
+  max-height: 64vh;
+  margin-top: 10px;
+  overflow-y: auto;
+}
+
+.playtest-grid-card {
+  position: relative;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: default;
+}
+
+.playtest-grid-card.is-waehlbar {
+  cursor: pointer;
+}
+
+.playtest-grid-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.playtest-grid-card.is-waehlbar:hover img,
+.playtest-grid-card.is-waehlbar:focus-visible img {
+  outline: 2px solid #ffd66b;
+  outline-offset: 2px;
+}
+
+/* Die Nummer zeigt die Stelle in der Reihenfolge: 1 ist die oberste. */
+.playtest-grid-nr {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  padding: 1px 6px;
+  color: #f3eeff;
+  background: rgba(10, 6, 24, 0.85);
+  border-radius: 10px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.72rem;
 }
 
 .playtest-hand .playtest-card {

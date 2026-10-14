@@ -153,6 +153,15 @@ const els = {
   playtestLibCount: document.getElementById("playtestLibCount"),
   playtestHandCount: document.getElementById("playtestHandCount"),
   playtestBoardCount: document.getElementById("playtestBoardCount"),
+  playtestGraveCount: document.getElementById("playtestGraveCount"),
+  playtestGraveyard: document.getElementById("playtestGraveyard"),
+  playtestGraveyardBody: document.getElementById("playtestGraveyardBody"),
+  playtestCardsModal: document.getElementById("playtestCardsModal"),
+  playtestCardsTitle: document.getElementById("playtestCardsTitle"),
+  playtestCardsNote: document.getElementById("playtestCardsNote"),
+  playtestCardsGrid: document.getElementById("playtestCardsGrid"),
+  playtestCardsCloseBtn: document.getElementById("playtestCardsCloseBtn"),
+  playtestMenu: document.getElementById("playtestMenu"),
   playtestDrawBtn: document.getElementById("playtestDrawBtn"),
   playtestTurnBtn: document.getElementById("playtestTurnBtn"),
   playtestResetBtn: document.getElementById("playtestResetBtn"),
@@ -3231,13 +3240,33 @@ const START_HAND = 7;
 const BOARD_CARD_W = 118;
 const BOARD_CARD_H = Math.round((BOARD_CARD_W * 88) / 63);
 
+// Die Rückseite kommt von Scryfall, von wo auch jedes andere Kartenbild
+// in diesem Programm kommt. Lädt sie nicht, tritt der gezeichnete Ersatz
+// darunter hervor; der Stapel bleibt dann sichtbar, nur ohne Bild.
+const KARTEN_RUECKSEITE =
+  "https://backs.scryfall.io/large/0/a/0aeebaf5-8c7d-4636-9e82-8c27447861f7.jpg";
+
+// Mengen, die in den Untermenüs zur Auswahl stehen.
+const PT_MENGEN = [1, 2, 3, 5, 7, 10];
+
 const playtest = {
   library: [],
   hand: [],
   board: [],
+  graveyard: [],
   commander: null,
   turn: 1,
   laeuft: false
+};
+
+// Die Zonen, zwischen denen eine Karte wandern kann. Jede weiss, wo ihre
+// Karten liegen; damit kommt jede Bewegung mit einer Funktion aus, statt
+// für jedes Paar von Zonen einen eigenen Fall zu brauchen.
+const PT_ZONEN = {
+  hand: { label: "Hand", liste: () => playtest.hand },
+  board: { label: "Spielfeld", liste: () => playtest.board },
+  graveyard: { label: "Friedhof", liste: () => playtest.graveyard },
+  library: { label: "Bibliothek", liste: () => playtest.library }
 };
 
 // Jedes Exemplar einer Karte wird ein eigenes Stück mit eigener Nummer,
@@ -3257,17 +3286,18 @@ function playtestStapel() {
   return stuecke;
 }
 
-
 function playtestNeu() {
   const commander = state.activeDeck?.commander;
   playtest.library = mischen(playtestStapel());
   playtest.hand = playtest.library.splice(0, START_HAND);
   playtest.board = [];
+  playtest.graveyard = [];
   playtest.commander = commander
     ? { uid: `cmd#${commander.id}`, id: commander.id, name: commander.name, image: commander.image }
     : null;
   playtest.turn = 1;
   playtest.laeuft = true;
+  schliessePlaytestMenu();
   renderPlaytest();
   setPlaytestHinweis(t("Neues Spiel, {count} Karten auf der Hand.", { count: playtest.hand.length }));
 }
@@ -3280,7 +3310,9 @@ function playtestZiehen(anzahl = 1) {
   }
   renderPlaytest();
   setPlaytestHinweis(
-    gezogen ? t("{count} Karte gezogen.", { count: gezogen }) : t("Die Bibliothek ist leer.")
+    gezogen
+      ? t(gezogen === 1 ? "{count} Karte gezogen." : "{count} Karten gezogen.", { count: gezogen })
+      : t("Die Bibliothek ist leer.")
   );
 }
 
@@ -3294,6 +3326,67 @@ function playtestNeuerZug() {
   setPlaytestHinweis(t("Zug {turn}.", { turn: playtest.turn }));
 }
 
+// --- Karten zwischen Zonen bewegen ---------------------------------------
+
+// Nimmt ein Stück aus der Zone heraus, in der es gerade liegt.
+function playtestEntnehmen(uid) {
+  for (const name of Object.keys(PT_ZONEN)) {
+    const liste = PT_ZONEN[name].liste();
+    const index = liste.findIndex((stueck) => stueck.uid === uid);
+    if (index >= 0) {
+      return liste.splice(index, 1)[0];
+    }
+  }
+  if (playtest.commander && playtest.commander.uid === uid) {
+    const stueck = playtest.commander;
+    playtest.commander = null;
+    return stueck;
+  }
+  return null;
+}
+
+// Legt ein Stück in eine Zone. Oben heisst bei der Bibliothek "als
+// nächstes gezogen", beim Friedhof "zuletzt dorthin gewandert".
+function playtestEinfuegen(stueck, zone, optionen = {}) {
+  if (!stueck) {
+    return;
+  }
+  if (zone === "commander") {
+    playtest.commander = stueck;
+    return;
+  }
+  if (zone === "board") {
+    stueck.tapped = stueck.tapped || false;
+    stueck.xAnteil = optionen.xAnteil ?? stueck.xAnteil ?? 0.45;
+    stueck.yAnteil = optionen.yAnteil ?? stueck.yAnteil ?? 0.4;
+    playtest.board.push(stueck);
+    return;
+  }
+
+  // Ausserhalb des Spielfelds ist nichts getappt.
+  delete stueck.tapped;
+  const liste = PT_ZONEN[zone]?.liste();
+  if (!liste) {
+    return;
+  }
+  if (zone === "library") {
+    if (optionen.unten) liste.push(stueck);
+    else liste.unshift(stueck);
+  } else if (zone === "graveyard") {
+    liste.unshift(stueck);
+  } else {
+    liste.push(stueck);
+  }
+}
+
+function playtestVerschiebe(uid, zone, optionen = {}) {
+  const stueck = playtestEntnehmen(uid);
+  playtestEinfuegen(stueck, zone, optionen);
+  return stueck;
+}
+
+// --- Zeichnen -------------------------------------------------------------
+
 function playtestKartenBild(stueck, klassen = "") {
   return `
     <div class="playtest-card ${klassen}" data-uid="${escapeHtml(stueck.uid)}" title="${escapeHtml(stueck.name)}">
@@ -3306,11 +3399,24 @@ function playtestKartenBild(stueck, klassen = "") {
   `;
 }
 
+// Die Rückseite trägt das Bild und darunter einen gezeichneten Ersatz.
+// Fällt das Bild aus, bekommt die Karte die Klasse "ohne-bild" und der
+// Ersatz wird sichtbar.
+function playtestRueckseite(attribute = "") {
+  return `
+    <div class="playtest-card is-back" ${attribute}>
+      <img src="${KARTEN_RUECKSEITE}" alt="" draggable="false" />
+      <span class="playtest-back-ersatz">MTG</span>
+    </div>
+  `;
+}
+
 function renderPlaytest() {
   els.playtestTurn.textContent = playtest.turn;
   els.playtestLibCount.textContent = playtest.library.length;
   els.playtestHandCount.textContent = playtest.hand.length;
   els.playtestBoardCount.textContent = playtest.board.length;
+  els.playtestGraveCount.textContent = playtest.graveyard.length;
 
   els.playtestHand.innerHTML = playtest.hand
     .map((stueck) => playtestKartenBild(stueck, "is-hand"))
@@ -3321,7 +3427,9 @@ function renderPlaytest() {
     <span class="playtest-zone-title">${escapeHtml(t("Bibliothek"))} (${playtest.library.length})</span>
     ${
       playtest.library.length
-        ? `<div class="playtest-card is-back" data-draw="1" title="${escapeHtml(t("Klick zieht, Ziehen legt direkt ins Spiel"))}"><span>MTG</span></div>`
+        ? playtestRueckseite(
+            `data-draw="1" title="${escapeHtml(t("Klick zieht, Ziehen legt direkt ins Spiel, Rechtsklick öffnet das Menü"))}"`
+          )
         : `<div class="playtest-empty">${escapeHtml(t("leer"))}</div>`
     }
   `;
@@ -3334,6 +3442,15 @@ function renderPlaytest() {
         : `<div class="playtest-empty">${escapeHtml(t("keiner"))}</div>`
     }
   `;
+
+  // Vom Friedhof liegt die zuletzt dorthin gewanderte Karte obenauf. Der
+  // Titel zählt mit und öffnet angeklickt den ganzen Stapel, sonst käme
+  // man an die darunter liegenden Karten nicht mehr heran.
+  els.playtestGraveyard.querySelector(".playtest-zone-title").textContent =
+    `${t("Friedhof")} (${playtest.graveyard.length})`;
+  els.playtestGraveyardBody.innerHTML = playtest.graveyard.length
+    ? playtestKartenBild(playtest.graveyard[0], "is-grave")
+    : `<div class="playtest-empty">${escapeHtml(t("leer"))}</div>`;
 
   for (const alt of els.playtestBoard.querySelectorAll(".playtest-card.is-board")) {
     alt.remove();
@@ -3361,6 +3478,15 @@ function renderPlaytest() {
     );
   }
 
+  // Bricht das Rückseitenbild weg, tritt der gezeichnete Ersatz hervor.
+  for (const img of els.playtestView.querySelectorAll(".playtest-card.is-back img")) {
+    img.addEventListener(
+      "error",
+      () => img.closest(".playtest-card")?.classList.add("ohne-bild"),
+      { once: true }
+    );
+  }
+
   els.playtestHint.hidden = playtest.board.length > 0;
 }
 
@@ -3372,26 +3498,236 @@ function setPlaytestHinweis(text, deckName = state.activeDeck?.name || "") {
   els.playtestTitle.textContent = deckName ? `playtest — ${deckName} — ${text}` : `playtest — ${text}`;
 }
 
-// Ein Stück aus seiner bisherigen Zone nehmen.
-function playtestEntnehmen(uid) {
-  const ausHand = playtest.hand.findIndex((stueck) => stueck.uid === uid);
-  if (ausHand >= 0) {
-    return playtest.hand.splice(ausHand, 1)[0];
-  }
-  const ausBoard = playtest.board.findIndex((stueck) => stueck.uid === uid);
-  if (ausBoard >= 0) {
-    return playtest.board.splice(ausBoard, 1)[0];
-  }
-  if (playtest.commander && playtest.commander.uid === uid) {
-    const stueck = playtest.commander;
-    playtest.commander = null;
-    return stueck;
-  }
-  return null;
+// --- Kartenraster ---------------------------------------------------------
+//
+// Zeigt eine Menge Karten in der Reihenfolge, in der sie gerade liegen.
+// Beim Durchsuchen der Bibliothek lässt sich eine davon anklicken und
+// wandert dann auf die Hand; beim blossen Ansehen passiert nichts.
+
+let kartenRasterAuswahl = null;
+
+function openPlaytestKarten(titel, stuecke, { hinweis = "", waehlbar = false } = {}) {
+  kartenRasterAuswahl = waehlbar ? (uid) => uid : null;
+  els.playtestCardsTitle.textContent = titel;
+  els.playtestCardsNote.textContent = hinweis;
+  els.playtestCardsGrid.innerHTML = stuecke.length
+    ? stuecke
+        .map(
+          (stueck, nr) => `
+            <button type="button" class="playtest-grid-card${waehlbar ? " is-waehlbar" : ""}" data-uid="${escapeHtml(
+              stueck.uid
+            )}"${waehlbar ? "" : " disabled"} title="${escapeHtml(stueck.name)}">
+              <span class="playtest-grid-nr">${nr + 1}</span>
+              ${
+                stueck.image
+                  ? `<img src="${escapeHtml(stueck.image)}" alt="${escapeHtml(stueck.name)}" loading="lazy" />`
+                  : `<span class="playtest-card-name">${escapeHtml(stueck.name)}</span>`
+              }
+            </button>
+          `
+        )
+        .join("")
+    : `<div class="empty-state">${escapeHtml(t("Keine Karten."))}</div>`;
+  openModal(els.playtestCardsModal);
 }
 
-// Ziehen mit dem Zeiger: ein Schatten folgt dem Finger, beim Loslassen
-// entscheidet die Stelle darunter, wohin die Karte kommt.
+// --- Kontextmenü ----------------------------------------------------------
+
+let menuEintraege = [];
+
+function schliessePlaytestMenu() {
+  els.playtestMenu.hidden = true;
+  els.playtestMenu.innerHTML = "";
+}
+
+function menuEintragZuPfad(pfad) {
+  return pfad
+    .split(".")
+    .reduce((liste, teil) => (Array.isArray(liste) ? liste[Number(teil)] : liste?.unter?.[Number(teil)]), menuEintraege);
+}
+
+function menuHtml(eintraege, pfad = "") {
+  return eintraege
+    .map((eintrag, i) => {
+      const id = pfad ? `${pfad}.${i}` : String(i);
+      if (eintrag.trenner) {
+        return `<div class="pt-menu-trenner"></div>`;
+      }
+      if (eintrag.unter) {
+        return `
+          <div class="pt-menu-item has-sub" data-sub="${id}">
+            <span>${escapeHtml(t(eintrag.label))}</span>
+            <span class="pt-menu-pfeil" aria-hidden="true">&rsaquo;</span>
+            <div class="pt-submenu" hidden>${menuHtml(eintrag.unter, id)}</div>
+          </div>
+        `;
+      }
+      return `
+        <div class="pt-menu-item" data-aktion="${id}">
+          <span>${escapeHtml(t(eintrag.label))}</span>
+          ${eintrag.kuerzel ? `<span class="pt-menu-kuerzel">${escapeHtml(eintrag.kuerzel)}</span>` : ""}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function zeigePlaytestMenu(x, y, eintraege) {
+  menuEintraege = eintraege;
+  els.playtestMenu.innerHTML = menuHtml(eintraege);
+  els.playtestMenu.hidden = false;
+  // Erst sichtbar machen, dann messen: vorher hat das Menü keine Grösse.
+  const masse = els.playtestMenu.getBoundingClientRect();
+  const links = Math.min(x, window.innerWidth - masse.width - 8);
+  const oben = Math.min(y, window.innerHeight - masse.height - 8);
+  els.playtestMenu.style.left = `${Math.max(8, links)}px`;
+  els.playtestMenu.style.top = `${Math.max(8, oben)}px`;
+}
+
+// --- Die Befehle der Bibliothek ------------------------------------------
+
+function bibliothekMischen() {
+  playtest.library = mischen(playtest.library);
+  renderPlaytest();
+  setPlaytestHinweis(t("Bibliothek gemischt."));
+}
+
+function zufallskarteZiehen() {
+  if (!playtest.library.length) {
+    setPlaytestHinweis(t("Die Bibliothek ist leer."));
+    return;
+  }
+  const index = Math.floor(Math.random() * playtest.library.length);
+  const stueck = playtest.library.splice(index, 1)[0];
+  playtest.hand.push(stueck);
+  renderPlaytest();
+  setPlaytestHinweis(t("Zufällig gezogen: {name}.", { name: stueck.name }));
+}
+
+function obersteVerschieben(zone, unten = false) {
+  if (!playtest.library.length) {
+    setPlaytestHinweis(t("Die Bibliothek ist leer."));
+    return;
+  }
+  const stueck = playtest.library.shift();
+  playtestEinfuegen(stueck, zone, { unten });
+  renderPlaytest();
+  setPlaytestHinweis(
+    t("{name} nach {zone}.", { name: stueck.name, zone: t(PT_ZONEN[zone]?.label || zone) })
+  );
+}
+
+function obersteAufdecken() {
+  if (!playtest.library.length) {
+    setPlaytestHinweis(t("Die Bibliothek ist leer."));
+    return;
+  }
+  openPlaytestKarten(t("Oberste Karte"), [playtest.library[0]], {
+    hinweis: t("Die Karte bleibt, wo sie ist.")
+  });
+  setPlaytestHinweis(t("Aufgedeckt: {name}.", { name: playtest.library[0].name }));
+}
+
+function bibliothekAnsehen(ende, anzahl) {
+  if (!playtest.library.length) {
+    setPlaytestHinweis(t("Die Bibliothek ist leer."));
+    return;
+  }
+  const stuecke =
+    ende === "unten" ? playtest.library.slice(-anzahl).reverse() : playtest.library.slice(0, anzahl);
+  openPlaytestKarten(
+    ende === "unten"
+      ? t("Unterste {count} Karten", { count: stuecke.length })
+      : t("Oberste {count} Karten", { count: stuecke.length }),
+    stuecke,
+    { hinweis: t("Nur ansehen, die Reihenfolge bleibt unverändert.") }
+  );
+}
+
+function bibliothekMillen(anzahl) {
+  const gemillt = Math.min(anzahl, playtest.library.length);
+  for (let i = 0; i < gemillt; i++) {
+    playtestEinfuegen(playtest.library.shift(), "graveyard");
+  }
+  renderPlaytest();
+  setPlaytestHinweis(
+    gemillt
+      ? t(gemillt === 1 ? "{count} Karte in den Friedhof." : "{count} Karten in den Friedhof.", {
+          count: gemillt
+        })
+      : t("Die Bibliothek ist leer.")
+  );
+}
+
+function oeffneBibliothekssuche() {
+  openPlaytestKarten(t("Bibliothek durchsuchen"), playtest.library, {
+    hinweis: t("In der Reihenfolge der Bibliothek, oberste Karte zuerst. Ein Klick nimmt sie auf die Hand."),
+    waehlbar: true
+  });
+}
+
+function oeffneFriedhof() {
+  openPlaytestKarten(t("Friedhof"), playtest.graveyard, {
+    hinweis: t("Zuletzt dorthin gewandert zuerst. Ein Klick nimmt die Karte auf die Hand."),
+    waehlbar: true
+  });
+}
+
+function obersteAnsehen() {
+  if (!playtest.library.length) {
+    setPlaytestHinweis(t("Die Bibliothek ist leer."));
+    return;
+  }
+  const oberste = playtest.library[0];
+  const karte = state.activeDeckCards.find((eintrag) => eintrag.id === oberste.id);
+  if (istEigeneKarte(oberste.id) && karte) {
+    selectDeckSearchCard(eigeneKarteAus(karte));
+    return;
+  }
+  fetchJson(`https://api.scryfall.com/cards/${encodeURIComponent(oberste.id)}`)
+    .then(selectDeckSearchCard)
+    .catch(() => setPlaytestHinweis(t("Die Karte liess sich nicht laden.")));
+}
+
+// Die Einträge des Bibliotheksmenüs.
+function bibliothekMenuEintraege() {
+  const mengen = (aktion) => PT_MENGEN.map((n) => ({ label: String(n), aktion: () => aktion(n) }));
+  return [
+    { label: "Ziehen", kuerzel: "D", aktion: () => playtestZiehen(1) },
+    { label: "X Karten ziehen", unter: mengen((n) => playtestZiehen(n)) },
+    {
+      label: "Oberste Karte nach",
+      unter: [
+        { label: "Hand", aktion: () => obersteVerschieben("hand") },
+        { label: "Spielfeld", aktion: () => obersteVerschieben("board") },
+        { label: "Friedhof", aktion: () => obersteVerschieben("graveyard") },
+        { label: "Unter die Bibliothek", aktion: () => obersteVerschieben("library", true) }
+      ]
+    },
+    { trenner: true },
+    { label: "Bibliothek durchsuchen", kuerzel: "Strg+F", aktion: oeffneBibliothekssuche },
+    { label: "Bibliothek mischen", aktion: bibliothekMischen },
+    { label: "Zufällige Karte ziehen", aktion: zufallskarteZiehen },
+    { trenner: true },
+    { label: "Oberste Karte aufdecken", aktion: obersteAufdecken },
+    { label: "Oberste X Karten ansehen", unter: mengen((n) => bibliothekAnsehen("oben", n)) },
+    { label: "Unterste X Karten ansehen", unter: mengen((n) => bibliothekAnsehen("unten", n)) },
+    { label: "X Karten millen", unter: mengen((n) => bibliothekMillen(n)) },
+    { trenner: true },
+    {
+      label: "Karten-Aktionen",
+      unter: [
+        { label: "Oberste Karte ansehen", aktion: obersteAnsehen },
+        { label: "Oberste Karte nach unten legen", aktion: () => obersteVerschieben("library", true) }
+      ]
+    }
+  ];
+}
+
+// --- Ziehen mit dem Zeiger ------------------------------------------------
+// Ein Schatten folgt dem Finger, beim Loslassen entscheidet die Zone
+// darunter, wohin die Karte kommt.
+
 let zug = null;
 
 // Nimmt einen laufenden Zug vorzeitig zurück: Schatten weg, Zustand weg.
@@ -3402,6 +3738,22 @@ function playtestZugAbbrechen() {
   zug?.schatten?.remove();
   zug?.quelle?.classList.remove("is-source");
   zug = null;
+}
+
+// Welche Zone liegt unter diesem Punkt? Bibliothek und Commander liegen
+// innerhalb des Spielfelds, deshalb werden sie zuerst gefragt.
+function playtestZoneAn(x, y) {
+  const trifft = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  };
+  if (trifft(els.playtestGraveyard)) return "graveyard";
+  if (trifft(els.playtestHand)) return "hand";
+  if (trifft(els.playtestLibrary)) return "library";
+  if (trifft(els.playtestCommander)) return "commander";
+  if (trifft(els.playtestBoard)) return "board";
+  return null;
 }
 
 function playtestZeigerStart(event) {
@@ -3421,6 +3773,7 @@ function playtestZeigerStart(event) {
     return;
   }
 
+  schliessePlaytestMenu();
   const rect = karte.getBoundingClientRect();
   zug = {
     pointerId: event.pointerId,
@@ -3467,6 +3820,21 @@ function playtestZeigerBewegung(event) {
   }
   zug.schatten.style.left = `${event.clientX - zug.griffX}px`;
   zug.schatten.style.top = `${event.clientY - zug.griffY}px`;
+
+  // Die Zone unter dem Zeiger hebt sich hervor, damit vor dem Loslassen
+  // zu sehen ist, wo die Karte landet.
+  const zone = playtestZoneAn(event.clientX, event.clientY);
+  for (const el of [els.playtestGraveyard, els.playtestHand, els.playtestLibrary, els.playtestCommander]) {
+    el?.classList.remove("is-ziel");
+  }
+  if (zone && zone !== "board") {
+    ({
+      graveyard: els.playtestGraveyard,
+      hand: els.playtestHand,
+      library: els.playtestLibrary,
+      commander: els.playtestCommander
+    })[zone]?.classList.add("is-ziel");
+  }
 }
 
 function playtestZeigerEnde(event) {
@@ -3475,6 +3843,9 @@ function playtestZeigerEnde(event) {
   zug = null;
   schatten?.remove();
   quelle?.classList.remove("is-source");
+  for (const el of [els.playtestGraveyard, els.playtestHand, els.playtestLibrary, els.playtestCommander]) {
+    el?.classList.remove("is-ziel");
+  }
 
   // Klick ohne Bewegung: aus der Bibliothek ziehen, sonst tappen.
   if (!bewegt) {
@@ -3490,14 +3861,8 @@ function playtestZeigerEnde(event) {
     return;
   }
 
-  const brett = els.playtestBoard.getBoundingClientRect();
-  const imBrett =
-    event.clientX >= brett.left &&
-    event.clientX <= brett.right &&
-    event.clientY >= brett.top &&
-    event.clientY <= brett.bottom;
-
-  if (!imBrett) {
+  const zone = playtestZoneAn(event.clientX, event.clientY);
+  if (!zone) {
     renderPlaytest();
     return;
   }
@@ -3508,19 +3873,36 @@ function playtestZeigerEnde(event) {
     return;
   }
 
-  // Anteil an der freien Fläche statt fester Pixel, geklemmt auf 0..1:
-  // Der Ablageort bleibt so immer innerhalb des Bretts, auch wenn beim
-  // Anfassen weit aussen am Kartenrand gegriffen wurde.
-  const nutzbarB = Math.max(0, brett.width - BOARD_CARD_W);
-  const nutzbarH = Math.max(0, brett.height - BOARD_CARD_H);
-  const rohX = event.clientX - brett.left - griffX;
-  const rohY = event.clientY - brett.top - griffY;
-  stueck.xAnteil = nutzbarB > 0 ? Math.min(1, Math.max(0, rohX / nutzbarB)) : 0;
-  stueck.yAnteil = nutzbarH > 0 ? Math.min(1, Math.max(0, rohY / nutzbarH)) : 0;
-  stueck.tapped = stueck.tapped || false;
-  playtest.board.push(stueck);
+  // Der Commander-Platz nimmt nur den Commander zurück; jede andere
+  // Karte landet dort auf dem Spielfeld.
+  const ziel = zone === "commander" && !String(stueck.uid).startsWith("cmd#") ? "board" : zone;
+
+  if (ziel === "board") {
+    // Anteil an der freien Fläche statt fester Pixel, geklemmt auf 0..1:
+    // Der Ablageort bleibt so immer innerhalb des Bretts, auch wenn beim
+    // Anfassen weit aussen am Kartenrand gegriffen wurde.
+    const brett = els.playtestBoard.getBoundingClientRect();
+    const nutzbarB = Math.max(0, brett.width - BOARD_CARD_W);
+    const nutzbarH = Math.max(0, brett.height - BOARD_CARD_H);
+    const rohX = event.clientX - brett.left - griffX;
+    const rohY = event.clientY - brett.top - griffY;
+    playtestEinfuegen(stueck, "board", {
+      xAnteil: nutzbarB > 0 ? Math.min(1, Math.max(0, rohX / nutzbarB)) : 0,
+      yAnteil: nutzbarH > 0 ? Math.min(1, Math.max(0, rohY / nutzbarH)) : 0
+    });
+  } else {
+    playtestEinfuegen(stueck, ziel);
+    setPlaytestHinweis(
+      t("{name} nach {zone}.", {
+        name: stueck.name,
+        zone: ziel === "commander" ? t("Commander") : t(PT_ZONEN[ziel].label)
+      })
+    );
+  }
   renderPlaytest();
 }
+
+// --- Öffnen und Schliessen ------------------------------------------------
 
 // Der Playtester bekommt einen eigenen Tab. Welches Deck gespielt wird,
 // steht in der Adresse, damit die Seite dort für sich allein laden kann
@@ -3557,7 +3939,13 @@ async function startePlaytestSeite(deckId) {
     // wo er suchen soll.
     await authBereit;
     if (state.activeDeck?.id !== deckId) {
-      applyDeckResult(await deckStore.get(deckId));
+      // Ein öffentliches Deck darf jeder durchspielen, auch ohne Konto.
+      // Darum erst der eigene Weg, dann der öffentliche.
+      try {
+        applyDeckResult(await deckStore.get(deckId));
+      } catch (fehler) {
+        applyDeckResult(await api.getPublicDeck(deckId));
+      }
     }
     if (!state.activeDeckCards.length) {
       setPlaytestHinweis(t("Das Deck hat keine Karten zum Spielen."));
@@ -3573,6 +3961,7 @@ async function startePlaytestSeite(deckId) {
 
 function closePlaytest() {
   playtestZugAbbrechen();
+  schliessePlaytestMenu();
   playtest.laeuft = false;
   // Der Tab wurde aus dem Deck-Editor heraus geöffnet und darf sich
   // deshalb selbst schliessen. Wer die Adresse von Hand aufgerufen hat,
@@ -4644,6 +5033,69 @@ els.playtestTurnBtn.addEventListener("click", playtestNeuerZug);
 els.playtestResetBtn.addEventListener("click", playtestNeu);
 
 els.playtestView.addEventListener("pointerdown", playtestZeigerStart);
+
+// Rechtsklick auf die Bibliothek öffnet ihr Menü. Das eigene Menü des
+// Browsers tritt dafür zurück.
+els.playtestView.addEventListener("contextmenu", (event) => {
+  if (!playtest.laeuft || !els.playtestLibrary.contains(event.target)) {
+    return;
+  }
+  event.preventDefault();
+  zeigePlaytestMenu(event.clientX, event.clientY, bibliothekMenuEintraege());
+});
+
+// Im Menü: ein Eintrag mit Untermenü klappt es auf, ein Eintrag mit
+// Befehl führt ihn aus und schliesst das Menü.
+els.playtestMenu.addEventListener("click", (event) => {
+  const befehl = event.target.closest("[data-aktion]");
+  if (befehl) {
+    menuEintragZuPfad(befehl.dataset.aktion)?.aktion?.();
+    schliessePlaytestMenu();
+    return;
+  }
+  const auf = event.target.closest("[data-sub]");
+  if (!auf) {
+    return;
+  }
+  const panel = auf.querySelector(".pt-submenu");
+  const warZu = panel.hidden;
+  for (const anderes of els.playtestMenu.querySelectorAll(".pt-submenu")) {
+    anderes.hidden = true;
+  }
+  panel.hidden = !warZu;
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!els.playtestMenu.hidden && !els.playtestMenu.contains(event.target)) {
+    schliessePlaytestMenu();
+  }
+});
+
+// Der Friedhof zeigt nur die oberste Karte. Sein Titel öffnet den ganzen
+// Stapel, sonst käme man an die darunter liegenden nicht mehr heran.
+els.playtestGraveyard.querySelector(".playtest-zone-title").addEventListener("click", oeffneFriedhof);
+
+els.playtestCardsCloseBtn.addEventListener("click", () => closeModal(els.playtestCardsModal));
+els.playtestCardsModal.addEventListener("click", (event) => {
+  if (event.target === els.playtestCardsModal) {
+    closeModal(els.playtestCardsModal);
+  }
+});
+
+// Im Raster nimmt ein Klick die Karte auf die Hand, sofern das Raster
+// dafür geöffnet wurde.
+els.playtestCardsGrid.addEventListener("click", (event) => {
+  const karte = event.target.closest(".playtest-grid-card.is-waehlbar");
+  if (!karte || !kartenRasterAuswahl) {
+    return;
+  }
+  const stueck = playtestVerschiebe(karte.dataset.uid, "hand");
+  closeModal(els.playtestCardsModal);
+  renderPlaytest();
+  if (stueck) {
+    setPlaytestHinweis(t("{name} auf die Hand.", { name: stueck.name }));
+  }
+});
 window.addEventListener("pointermove", playtestZeigerBewegung);
 window.addEventListener("pointerup", playtestZeigerEnde);
 window.addEventListener("pointercancel", (event) => {
@@ -4663,7 +5115,12 @@ window.addEventListener("keydown", (event) => {
   }
 
   const taste = event.key.toLowerCase();
-  if (taste === "d" && !event.ctrlKey && !event.metaKey) {
+  if (taste === "f" && (event.ctrlKey || event.metaKey)) {
+    // Die Suche des Browsers hilft hier nicht weiter, die Bibliothek
+    // steht ja nicht auf der Seite.
+    event.preventDefault();
+    oeffneBibliothekssuche();
+  } else if (taste === "d" && !event.ctrlKey && !event.metaKey) {
     event.preventDefault();
     playtestZiehen(1);
   } else if (taste === "n" && (event.ctrlKey || event.metaKey || event.shiftKey)) {
@@ -4674,7 +5131,15 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     playtestNeuerZug();
   } else if (event.key === "Escape") {
-    closePlaytest();
+    // Escape räumt von innen nach aussen: erst das Menü, dann das
+    // Kartenfenster, erst zuletzt den Playtester selbst.
+    if (!els.playtestMenu.hidden) {
+      schliessePlaytestMenu();
+    } else if (els.playtestCardsModal.classList.contains("open")) {
+      closeModal(els.playtestCardsModal);
+    } else {
+      closePlaytest();
+    }
   }
 });
 

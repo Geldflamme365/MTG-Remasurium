@@ -531,9 +531,15 @@
              und ist wie die übrigen Zonen ein Ablageziel. -->
         <div class="playtest-hand-row">
           <div class="playtest-hand" id="playtestHand"></div>
-          <div class="playtest-zone playtest-graveyard" id="playtestGraveyard" data-zone="graveyard">
-            <span class="playtest-zone-title">Friedhof</span>
-            <div class="playtest-zone-body" id="playtestGraveyardBody"></div>
+          <div class="playtest-side-zones">
+            <div class="playtest-zone playtest-side-zone" id="playtestGraveyard" data-zone="graveyard">
+              <span class="playtest-zone-title">Friedhof</span>
+              <div class="playtest-zone-body" id="playtestGraveyardBody"></div>
+            </div>
+            <div class="playtest-zone playtest-side-zone" id="playtestExile" data-zone="exile">
+              <span class="playtest-zone-title">Exil</span>
+              <div class="playtest-zone-body" id="playtestExileBody"></div>
+            </div>
           </div>
         </div>
 
@@ -543,6 +549,7 @@
           <span class="playtest-stat"><span>Hand</span><strong id="playtestHandCount">0</strong></span>
           <span class="playtest-stat"><span>Im Spiel</span><strong id="playtestBoardCount">0</strong></span>
           <span class="playtest-stat"><span>Friedhof</span><strong id="playtestGraveCount">0</strong></span>
+          <span class="playtest-stat"><span>Exil</span><strong id="playtestExileCount">0</strong></span>
           <div class="button-row">
             <button id="playtestDrawBtn" type="button" class="retro-button">Ziehen (D)</button>
             <button id="playtestTurnBtn" type="button" class="retro-button">Neuer Zug (N)</button>

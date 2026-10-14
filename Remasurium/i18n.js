@@ -187,6 +187,7 @@ const EN = {
   "{count} Karte gezogen.": "Drew {count} card.",
   "{count} Karten gezogen.": "Drew {count} cards.",
   "Friedhof": "Graveyard",
+  "Exil": "Exile",
   "Spielfeld": "Battlefield",
   "Hand": "Hand",
   "karten": "cards",

@@ -707,34 +707,49 @@ body.is-playtest .desk {
   opacity: 0.3;
 }
 
-/* Hand und Friedhof teilen sich eine Reihe: die Hand nimmt den Platz,
-   der Friedhof steht rechts daneben in Zonenbreite. */
+/* Hand und Ablagezonen teilen sich eine Reihe: die Hand nimmt den Platz,
+   Friedhof und Exil stehen rechts daneben. */
 .playtest-hand-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 146px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   background: linear-gradient(180deg, #ece8de, #d7d2c8);
   border-bottom: 2px solid #8d887e;
 }
 
+/* flex-start ist der Punkt: ohne das strecken sich die Karten auf die
+   Höhe der Reihe, und die richtet sich nach den Zonen daneben. Dann wäre
+   eine Handkarte so hoch wie der Friedhof und das Seitenverhältnis
+   dahin. */
 .playtest-hand {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   min-height: 176px;
   padding: 10px;
   overflow-x: auto;
 }
 
-.playtest-graveyard {
-  margin: 8px 10px 8px 0;
+.playtest-hand .playtest-card {
+  flex: none;
+}
+
+.playtest-side-zones {
+  display: flex;
+  gap: 8px;
+  padding: 10px 10px 10px 0;
+}
+
+.playtest-side-zone {
+  width: 124px;
 }
 
 .playtest-zone-body {
   display: grid;
 }
 
-/* Der Titel des Friedhofs öffnet den ganzen Stapel. */
-.playtest-graveyard .playtest-zone-title {
+/* Der Titel einer Ablagezone öffnet ihren ganzen Stapel. */
+.playtest-side-zone .playtest-zone-title {
   cursor: pointer;
   text-decoration: underline;
 }

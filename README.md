@@ -279,17 +279,29 @@ next to the editor.
 
 The library is shuffled fresh, seven cards go to the hand, and the
 commander sits in its own zone next to the library, the same size. The
-graveyard sits to the right of your hand. Its title counts what is in it
-and opens the whole pile, since the zone itself only shows the card on
-top.
+graveyard and the exile zone sit to the right of your hand. Each title
+counts what is in it and opens the whole pile, since the zone itself only
+shows the card on top.
+
+Point at a card and a single key sends it somewhere, no dragging needed:
+
+| Key | Where the card goes |
+| --- | --- |
+| `E` | Exile |
+| `G` | Graveyard |
+| `L` | Top of the library |
+| `H` | Hand |
+
+Over the library's pile those keys act on its top card. With nothing
+under the pointer they do nothing, so `D` keeps drawing as usual.
 
 The library shows a real card back, fetched from Scryfall like every
 other card image here. If that image cannot be loaded, a drawn stand-in
 takes its place so the pile stays visible.
 
 Dropping a card on a zone puts it in that zone: hand, battlefield,
-graveyard, library. The zone under your pointer lights up before you let
-go. Library and commander sit inside the battlefield, so they are asked
+graveyard, exile, library. The zone under your pointer lights up before
+you let go. Library and commander sit inside the battlefield, so they are asked
 first; the commander zone takes only the commander back, anything else
 dropped there lands on the battlefield.
 

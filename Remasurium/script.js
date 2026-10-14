@@ -156,6 +156,9 @@ const els = {
   playtestGraveCount: document.getElementById("playtestGraveCount"),
   playtestGraveyard: document.getElementById("playtestGraveyard"),
   playtestGraveyardBody: document.getElementById("playtestGraveyardBody"),
+  playtestExile: document.getElementById("playtestExile"),
+  playtestExileBody: document.getElementById("playtestExileBody"),
+  playtestExileCount: document.getElementById("playtestExileCount"),
   playtestCardsModal: document.getElementById("playtestCardsModal"),
   playtestCardsTitle: document.getElementById("playtestCardsTitle"),
   playtestCardsNote: document.getElementById("playtestCardsNote"),
@@ -3254,6 +3257,7 @@ const playtest = {
   hand: [],
   board: [],
   graveyard: [],
+  exile: [],
   commander: null,
   turn: 1,
   laeuft: false
@@ -3266,6 +3270,7 @@ const PT_ZONEN = {
   hand: { label: "Hand", liste: () => playtest.hand },
   board: { label: "Spielfeld", liste: () => playtest.board },
   graveyard: { label: "Friedhof", liste: () => playtest.graveyard },
+  exile: { label: "Exil", liste: () => playtest.exile },
   library: { label: "Bibliothek", liste: () => playtest.library }
 };
 
@@ -3292,6 +3297,7 @@ function playtestNeu() {
   playtest.hand = playtest.library.splice(0, START_HAND);
   playtest.board = [];
   playtest.graveyard = [];
+  playtest.exile = [];
   playtest.commander = commander
     ? { uid: `cmd#${commander.id}`, id: commander.id, name: commander.name, image: commander.image }
     : null;
@@ -3372,7 +3378,8 @@ function playtestEinfuegen(stueck, zone, optionen = {}) {
   if (zone === "library") {
     if (optionen.unten) liste.push(stueck);
     else liste.unshift(stueck);
-  } else if (zone === "graveyard") {
+  } else if (zone === "graveyard" || zone === "exile") {
+    // Zuletzt dorthin gewandert liegt obenauf.
     liste.unshift(stueck);
   } else {
     liste.push(stueck);
@@ -3417,6 +3424,7 @@ function renderPlaytest() {
   els.playtestHandCount.textContent = playtest.hand.length;
   els.playtestBoardCount.textContent = playtest.board.length;
   els.playtestGraveCount.textContent = playtest.graveyard.length;
+  els.playtestExileCount.textContent = playtest.exile.length;
 
   els.playtestHand.innerHTML = playtest.hand
     .map((stueck) => playtestKartenBild(stueck, "is-hand"))
@@ -3446,11 +3454,17 @@ function renderPlaytest() {
   // Vom Friedhof liegt die zuletzt dorthin gewanderte Karte obenauf. Der
   // Titel zählt mit und öffnet angeklickt den ganzen Stapel, sonst käme
   // man an die darunter liegenden Karten nicht mehr heran.
-  els.playtestGraveyard.querySelector(".playtest-zone-title").textContent =
-    `${t("Friedhof")} (${playtest.graveyard.length})`;
-  els.playtestGraveyardBody.innerHTML = playtest.graveyard.length
-    ? playtestKartenBild(playtest.graveyard[0], "is-grave")
-    : `<div class="playtest-empty">${escapeHtml(t("leer"))}</div>`;
+  for (const [zone, titelEl, koerperEl] of [
+    ["graveyard", els.playtestGraveyard, els.playtestGraveyardBody],
+    ["exile", els.playtestExile, els.playtestExileBody]
+  ]) {
+    const liste = PT_ZONEN[zone].liste();
+    titelEl.querySelector(".playtest-zone-title").textContent =
+      `${t(PT_ZONEN[zone].label)} (${liste.length})`;
+    koerperEl.innerHTML = liste.length
+      ? playtestKartenBild(liste[0], "is-ablage")
+      : `<div class="playtest-empty">${escapeHtml(t("leer"))}</div>`;
+  }
 
   for (const alt of els.playtestBoard.querySelectorAll(".playtest-card.is-board")) {
     alt.remove();
@@ -3666,8 +3680,11 @@ function oeffneBibliothekssuche() {
   });
 }
 
-function oeffneFriedhof() {
-  openPlaytestKarten(t("Friedhof"), playtest.graveyard, {
+// Friedhof und Exil zeigen in ihrer Zone nur die oberste Karte. Der
+// Titel öffnet den ganzen Stapel, sonst käme man an die darunter
+// liegenden Karten nicht mehr heran.
+function oeffneAblage(zone) {
+  openPlaytestKarten(t(PT_ZONEN[zone].label), PT_ZONEN[zone].liste(), {
     hinweis: t("Zuletzt dorthin gewandert zuerst. Ein Klick nimmt die Karte auf die Hand."),
     waehlbar: true
   });
@@ -3740,6 +3757,26 @@ function playtestZugAbbrechen() {
   zug = null;
 }
 
+// Die Zonen, die sich beim Ziehen hervorheben lassen. Das Spielfeld
+// gehört nicht dazu: Es ist die Fläche, auf der ohnehin alles liegt.
+const PT_ZIELE = [
+  els.playtestGraveyard,
+  els.playtestExile,
+  els.playtestHand,
+  els.playtestLibrary,
+  els.playtestCommander
+];
+
+function PT_ZIEL_ZU_EL() {
+  return {
+    graveyard: els.playtestGraveyard,
+    exile: els.playtestExile,
+    hand: els.playtestHand,
+    library: els.playtestLibrary,
+    commander: els.playtestCommander
+  };
+}
+
 // Welche Zone liegt unter diesem Punkt? Bibliothek und Commander liegen
 // innerhalb des Spielfelds, deshalb werden sie zuerst gefragt.
 function playtestZoneAn(x, y) {
@@ -3749,6 +3786,7 @@ function playtestZoneAn(x, y) {
     return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   };
   if (trifft(els.playtestGraveyard)) return "graveyard";
+  if (trifft(els.playtestExile)) return "exile";
   if (trifft(els.playtestHand)) return "hand";
   if (trifft(els.playtestLibrary)) return "library";
   if (trifft(els.playtestCommander)) return "commander";
@@ -3824,16 +3862,11 @@ function playtestZeigerBewegung(event) {
   // Die Zone unter dem Zeiger hebt sich hervor, damit vor dem Loslassen
   // zu sehen ist, wo die Karte landet.
   const zone = playtestZoneAn(event.clientX, event.clientY);
-  for (const el of [els.playtestGraveyard, els.playtestHand, els.playtestLibrary, els.playtestCommander]) {
+  for (const el of PT_ZIELE) {
     el?.classList.remove("is-ziel");
   }
   if (zone && zone !== "board") {
-    ({
-      graveyard: els.playtestGraveyard,
-      hand: els.playtestHand,
-      library: els.playtestLibrary,
-      commander: els.playtestCommander
-    })[zone]?.classList.add("is-ziel");
+    PT_ZIEL_ZU_EL()[zone]?.classList.add("is-ziel");
   }
 }
 
@@ -3843,7 +3876,7 @@ function playtestZeigerEnde(event) {
   zug = null;
   schatten?.remove();
   quelle?.classList.remove("is-source");
-  for (const el of [els.playtestGraveyard, els.playtestHand, els.playtestLibrary, els.playtestCommander]) {
+  for (const el of PT_ZIELE) {
     el?.classList.remove("is-ziel");
   }
 
@@ -5071,9 +5104,48 @@ document.addEventListener("pointerdown", (event) => {
   }
 });
 
-// Der Friedhof zeigt nur die oberste Karte. Sein Titel öffnet den ganzen
-// Stapel, sonst käme man an die darunter liegenden nicht mehr heran.
-els.playtestGraveyard.querySelector(".playtest-zone-title").addEventListener("click", oeffneFriedhof);
+els.playtestGraveyard
+  .querySelector(".playtest-zone-title")
+  .addEventListener("click", () => oeffneAblage("graveyard"));
+els.playtestExile
+  .querySelector(".playtest-zone-title")
+  .addEventListener("click", () => oeffneAblage("exile"));
+
+// Welche Karte liegt gerade unter dem Zeiger? Die Tastenkürzel schicken
+// sie in eine Zone, ohne dass man sie dafür ziehen muss.
+let ueberfahreneKarte = null;
+
+els.playtestView.addEventListener("pointerover", (event) => {
+  const karte = event.target.closest(".playtest-card");
+  // Der Stapel der Bibliothek trägt keine eigene Kennung; gemeint ist
+  // dort die oberste Karte.
+  ueberfahreneKarte = karte
+    ? karte.dataset.uid || (karte.dataset.draw === "1" ? playtest.library[0]?.uid || null : null)
+    : null;
+});
+
+els.playtestView.addEventListener("pointerleave", () => {
+  ueberfahreneKarte = null;
+});
+
+// Taste -> Zone. Entspricht den Anfangsbuchstaben: Exil, Graveyard,
+// Library, Hand.
+const PT_TASTEN_ZONEN = { e: "exile", g: "graveyard", l: "library", h: "hand" };
+
+function playtestTastenZug(taste) {
+  const zone = PT_TASTEN_ZONEN[taste];
+  if (!zone || !ueberfahreneKarte) {
+    return false;
+  }
+  const stueck = playtestVerschiebe(ueberfahreneKarte, zone);
+  if (!stueck) {
+    return false;
+  }
+  ueberfahreneKarte = null;
+  renderPlaytest();
+  setPlaytestHinweis(t("{name} nach {zone}.", { name: stueck.name, zone: t(PT_ZONEN[zone].label) }));
+  return true;
+}
 
 els.playtestCardsCloseBtn.addEventListener("click", () => closeModal(els.playtestCardsModal));
 els.playtestCardsModal.addEventListener("click", (event) => {
@@ -5115,6 +5187,13 @@ window.addEventListener("keydown", (event) => {
   }
 
   const taste = event.key.toLowerCase();
+  // Liegt der Zeiger auf einer Karte, schicken E, G, L und H sie in ihre
+  // Zone. Das geht den übrigen Kürzeln vor, aber nur wenn wirklich eine
+  // Karte unter dem Zeiger liegt - sonst bliebe etwa H ohne Wirkung.
+  if (!event.ctrlKey && !event.metaKey && !event.shiftKey && playtestTastenZug(taste)) {
+    event.preventDefault();
+    return;
+  }
   if (taste === "f" && (event.ctrlKey || event.metaKey)) {
     // Die Suche des Browsers hilft hier nicht weiter, die Bibliothek
     // steht ja nicht auf der Seite.

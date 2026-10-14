@@ -870,6 +870,14 @@ body.is-playtest .desk {
   display: none;
 }
 
+/* Reicht der Platz rechts nicht, klappt das Untermenü nach links auf.
+   Ohne das wird es am Fensterrand abgeschnitten, und genau dort steht
+   die Bibliothek. */
+.pt-submenu.nach-links {
+  right: 100%;
+  left: auto;
+}
+
 /* Kartenraster: Bibliothek durchsuchen, Karten ansehen, Friedhof. */
 .playtest-cards-grid {
   display: grid;
@@ -906,18 +914,8 @@ body.is-playtest .desk {
   outline-offset: 2px;
 }
 
-/* Die Nummer zeigt die Stelle in der Reihenfolge: 1 ist die oberste. */
-.playtest-grid-nr {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  z-index: 1;
-  padding: 1px 6px;
-  color: #f3eeff;
-  background: rgba(10, 6, 24, 0.85);
-  border-radius: 10px;
-  font-family: "Courier New", Courier, monospace;
-  font-size: 0.72rem;
+.playtest-grid-card[hidden] {
+  display: none;
 }
 
 .playtest-hand .playtest-card {

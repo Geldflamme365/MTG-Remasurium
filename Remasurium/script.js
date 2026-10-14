@@ -163,6 +163,9 @@ const els = {
   playtestCardsTitle: document.getElementById("playtestCardsTitle"),
   playtestCardsNote: document.getElementById("playtestCardsNote"),
   playtestCardsGrid: document.getElementById("playtestCardsGrid"),
+  playtestCardsSearchRow: document.getElementById("playtestCardsSearchRow"),
+  playtestCardsSearch: document.getElementById("playtestCardsSearch"),
+  playtestCardsEmpty: document.getElementById("playtestCardsEmpty"),
   playtestCardsCloseBtn: document.getElementById("playtestCardsCloseBtn"),
   playtestMenu: document.getElementById("playtestMenu"),
   playtestDrawBtn: document.getElementById("playtestDrawBtn"),
@@ -3258,6 +3261,8 @@ const playtest = {
   board: [],
   graveyard: [],
   exile: [],
+  // Kennung der aufgedeckten obersten Karte, sonst null.
+  aufgedecktUid: null,
   commander: null,
   turn: 1,
   laeuft: false
@@ -3298,6 +3303,7 @@ function playtestNeu() {
   playtest.board = [];
   playtest.graveyard = [];
   playtest.exile = [];
+  playtest.aufgedecktUid = null;
   playtest.commander = commander
     ? { uid: `cmd#${commander.id}`, id: commander.id, name: commander.name, image: commander.image }
     : null;
@@ -3394,9 +3400,9 @@ function playtestVerschiebe(uid, zone, optionen = {}) {
 
 // --- Zeichnen -------------------------------------------------------------
 
-function playtestKartenBild(stueck, klassen = "") {
+function playtestKartenBild(stueck, klassen = "", attribute = "") {
   return `
-    <div class="playtest-card ${klassen}" data-uid="${escapeHtml(stueck.uid)}" title="${escapeHtml(stueck.name)}">
+    <div class="playtest-card ${klassen}" data-uid="${escapeHtml(stueck.uid)}" title="${escapeHtml(stueck.name)}" ${attribute}>
       ${
         stueck.image
           ? `<img src="${escapeHtml(stueck.image)}" alt="${escapeHtml(stueck.name)}" draggable="false" />`
@@ -3434,11 +3440,15 @@ function renderPlaytest() {
   els.playtestLibrary.innerHTML = `
     <span class="playtest-zone-title">${escapeHtml(t("Bibliothek"))} (${playtest.library.length})</span>
     ${
-      playtest.library.length
-        ? playtestRueckseite(
-            `data-draw="1" title="${escapeHtml(t("Klick zieht, Ziehen legt direkt ins Spiel, Rechtsklick öffnet das Menü"))}"`
-          )
-        : `<div class="playtest-empty">${escapeHtml(t("leer"))}</div>`
+      !playtest.library.length
+        ? `<div class="playtest-empty">${escapeHtml(t("leer"))}</div>`
+        : playtest.aufgedecktUid === playtest.library[0].uid
+          ? // Aufgedeckt: Die oberste Karte liegt offen da, bleibt aber
+            // der Stapel - ein Klick zieht sie wie sonst auch.
+            playtestKartenBild(playtest.library[0], "is-offen", 'data-draw="1"')
+          : playtestRueckseite(
+              `data-draw="1" title="${escapeHtml(t("Klick zieht, Ziehen legt direkt ins Spiel, Rechtsklick öffnet das Menü"))}"`
+            )
     }
   `;
 
@@ -3520,18 +3530,35 @@ function setPlaytestHinweis(text, deckName = state.activeDeck?.name || "") {
 
 let kartenRasterAuswahl = null;
 
+// Filtert das Raster nach Kartenname. Gezeichnet wird nur einmal, das
+// Suchen blendet danach bloss aus; so bleibt die Reihenfolge erhalten.
+function filterePlaytestKarten() {
+  const suche = els.playtestCardsSearch.value.trim().toLowerCase();
+  let treffer = 0;
+  for (const karte of els.playtestCardsGrid.querySelectorAll(".playtest-grid-card")) {
+    const passt = !suche || karte.title.toLowerCase().includes(suche);
+    karte.hidden = !passt;
+    if (passt) treffer += 1;
+  }
+  els.playtestCardsEmpty.hidden = treffer > 0 || !suche;
+}
+
 function openPlaytestKarten(titel, stuecke, { hinweis = "", waehlbar = false } = {}) {
   kartenRasterAuswahl = waehlbar ? (uid) => uid : null;
   els.playtestCardsTitle.textContent = titel;
   els.playtestCardsNote.textContent = hinweis;
+  // Gesucht wird dort, wo man etwas holen will. Beim blossen Ansehen
+  // von ein paar Karten wäre ein Suchfeld nur im Weg.
+  els.playtestCardsSearchRow.hidden = !waehlbar;
+  els.playtestCardsSearch.value = "";
+  els.playtestCardsEmpty.hidden = true;
   els.playtestCardsGrid.innerHTML = stuecke.length
     ? stuecke
         .map(
-          (stueck, nr) => `
+          (stueck) => `
             <button type="button" class="playtest-grid-card${waehlbar ? " is-waehlbar" : ""}" data-uid="${escapeHtml(
               stueck.uid
             )}"${waehlbar ? "" : " disabled"} title="${escapeHtml(stueck.name)}">
-              <span class="playtest-grid-nr">${nr + 1}</span>
               ${
                 stueck.image
                   ? `<img src="${escapeHtml(stueck.image)}" alt="${escapeHtml(stueck.name)}" loading="lazy" />`
@@ -3543,6 +3570,9 @@ function openPlaytestKarten(titel, stuecke, { hinweis = "", waehlbar = false } =
         .join("")
     : `<div class="empty-state">${escapeHtml(t("Keine Karten."))}</div>`;
   openModal(els.playtestCardsModal);
+  if (waehlbar) {
+    els.playtestCardsSearch.focus();
+  }
 }
 
 // --- Kontextmenü ----------------------------------------------------------
@@ -3631,15 +3661,22 @@ function obersteVerschieben(zone, unten = false) {
   );
 }
 
+// Dreht die oberste Karte um, statt ein Fenster zu öffnen. Sie bleibt
+// liegen, wo sie ist. Gemerkt wird die Kennung und nicht bloss "ja oder
+// nein": Sonst läge nach dem Ziehen die nächste Karte offen da, obwohl
+// aufgedeckt wurde genau eine.
 function obersteAufdecken() {
   if (!playtest.library.length) {
     setPlaytestHinweis(t("Die Bibliothek ist leer."));
     return;
   }
-  openPlaytestKarten(t("Oberste Karte"), [playtest.library[0]], {
-    hinweis: t("Die Karte bleibt, wo sie ist.")
-  });
-  setPlaytestHinweis(t("Aufgedeckt: {name}.", { name: playtest.library[0].name }));
+  const oberste = playtest.library[0];
+  const schonOffen = playtest.aufgedecktUid === oberste.uid;
+  playtest.aufgedecktUid = schonOffen ? null : oberste.uid;
+  renderPlaytest();
+  setPlaytestHinweis(
+    schonOffen ? t("Wieder zugedeckt.") : t("Aufgedeckt: {name}.", { name: oberste.name })
+  );
 }
 
 function bibliothekAnsehen(ende, anzahl) {
@@ -3726,7 +3763,7 @@ function bibliothekMenuEintraege() {
     { label: "Bibliothek mischen", aktion: bibliothekMischen },
     { label: "Zufällige Karte ziehen", aktion: zufallskarteZiehen },
     { trenner: true },
-    { label: "Oberste Karte aufdecken", aktion: obersteAufdecken },
+    { label: "Oberste Karte umdrehen", aktion: obersteAufdecken },
     { label: "Oberste X Karten ansehen", unter: mengen((n) => bibliothekAnsehen("oben", n)) },
     { label: "Unterste X Karten ansehen", unter: mengen((n) => bibliothekAnsehen("unten", n)) },
     { label: "X Karten millen", unter: mengen((n) => bibliothekMillen(n)) },
@@ -5094,8 +5131,24 @@ els.playtestMenu.addEventListener("click", (event) => {
   const warZu = panel.hidden;
   for (const anderes of els.playtestMenu.querySelectorAll(".pt-submenu")) {
     anderes.hidden = true;
+    anderes.classList.remove("nach-links");
+    anderes.style.marginTop = "";
   }
   panel.hidden = !warZu;
+  if (!panel.hidden) {
+    // Erst sichtbar, dann messen: vorher hat das Untermenü keine Grösse.
+    // Passt es rechts nicht mehr hin, klappt es nach links auf; steht es
+    // unten über, rückt es so weit hoch, wie es muss.
+    let masse = panel.getBoundingClientRect();
+    if (masse.right > window.innerWidth - 8) {
+      panel.classList.add("nach-links");
+      masse = panel.getBoundingClientRect();
+    }
+    const ueberstand = masse.bottom - (window.innerHeight - 8);
+    if (ueberstand > 0) {
+      panel.style.marginTop = `${-Math.min(ueberstand, masse.top - 8)}px`;
+    }
+  }
 });
 
 document.addEventListener("pointerdown", (event) => {
@@ -5146,6 +5199,8 @@ function playtestTastenZug(taste) {
   setPlaytestHinweis(t("{name} nach {zone}.", { name: stueck.name, zone: t(PT_ZONEN[zone].label) }));
   return true;
 }
+
+els.playtestCardsSearch.addEventListener("input", filterePlaytestKarten);
 
 els.playtestCardsCloseBtn.addEventListener("click", () => closeModal(els.playtestCardsModal));
 els.playtestCardsModal.addEventListener("click", (event) => {

@@ -315,16 +315,21 @@ Right-clicking the library opens its menu:
 | Search library | Every card as a grid, in library order |
 | Shuffle library | |
 | Draw a random card | Not the top one, any of them |
-| Reveal the top card | Shows it; it stays where it is |
+| Turn the top card over | Lays it face up on the pile, where it stays |
 | Peek at the top X cards | Look without changing the order |
 | Peek at the bottom X cards | Same from the other end |
 | Mill X cards | From the top into the graveyard |
 | Card actions | Look at the top card, or put it on the bottom |
 
-Every grid numbers its cards, 1 being the top one, so the order is
-readable and not just implied. Searching the library is the one grid you
-can click: a card goes to your hand. Peeking leaves everything alone.
-`Ctrl+F` opens the search as well.
+Turning the top card over leaves it where it is; it simply lies face up
+on the pile, and a click still draws it. It remembers which card was
+turned, not merely that something was, so drawing the revealed card does
+not leave the next one lying open.
+
+The grids you can take a card from — the library, the graveyard, the
+exile zone — carry a search field that filters by name as you type.
+Peeking at a few cards does not; there the order is the point. `Ctrl+F`
+opens the library search as well.
 
 Drag a card from your hand or straight off the library onto the table and
 drop it where you want it. The card follows your pointer the whole way,

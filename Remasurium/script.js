@@ -168,6 +168,9 @@ const els = {
   playtestCardsEmpty: document.getElementById("playtestCardsEmpty"),
   playtestCardsCloseBtn: document.getElementById("playtestCardsCloseBtn"),
   playtestMenu: document.getElementById("playtestMenu"),
+  playtestMana: document.getElementById("playtestMana"),
+  playtestManaToggle: document.getElementById("playtestManaToggle"),
+  playtestManaList: document.getElementById("playtestManaList"),
   playtestDrawBtn: document.getElementById("playtestDrawBtn"),
   playtestTurnBtn: document.getElementById("playtestTurnBtn"),
   playtestResetBtn: document.getElementById("playtestResetBtn"),
@@ -3274,10 +3277,15 @@ const playtest = {
   exile: [],
   // Kennung der aufgedeckten obersten Karte, sonst null.
   aufgedecktUid: null,
+  // Freies Mana dieses Zugs, je Farbe. Ein neuer Zug setzt alles auf 0.
+  mana: { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 },
   commander: null,
   turn: 1,
   laeuft: false
 };
+
+// Kennungen der Karten auf dem Spielfeld, die gerade ausgewählt sind.
+const playtestAuswahl = new Set();
 
 // Die Zonen, zwischen denen eine Karte wandern kann. Jede weiss, wo ihre
 // Karten liegen; damit kommt jede Bewegung mit einer Funktion aus, statt
@@ -3315,6 +3323,8 @@ function playtestNeu() {
   playtest.graveyard = [];
   playtest.exile = [];
   playtest.aufgedecktUid = null;
+  playtestAuswahl.clear();
+  manaLeeren();
   // Die Bilder der Spielsteine im Voraus holen, damit ein frisch
   // erzeugter Stein nicht erst leer auf dem Feld liegt.
   ensureTokenKarten(deckTokenRefs()).catch(() => {});
@@ -3348,6 +3358,8 @@ function playtestNeuerZug() {
   for (const stueck of playtest.board) {
     stueck.tapped = false;
   }
+  // Mana bleibt nicht über den Zug hinaus stehen.
+  manaLeeren();
   playtestZiehen(1);
   setPlaytestHinweis(t("Zug {turn}.", { turn: playtest.turn }));
 }
@@ -3499,6 +3511,7 @@ function renderPlaytest() {
   for (const alt of els.playtestBoard.querySelectorAll(".playtest-card.is-board")) {
     alt.remove();
   }
+  auswahlBereinigen();
   // Position kommt als Anteil (0 bis 1) der freien Fläche, nicht als
   // fester Pixelwert. So bleibt jede Karte innerhalb des Bretts, auch
   // wenn es seit dem Ablegen schmaler geworden ist.
@@ -3510,7 +3523,7 @@ function renderPlaytest() {
     const top = Math.round((stueck.yAnteil ?? 0) * nutzbarH);
     els.playtestBoard.insertAdjacentHTML(
       "beforeend",
-      `<div class="playtest-card is-board${stueck.tapped ? " is-tapped" : ""}${stueck.istToken ? " is-token" : ""}" data-uid="${escapeHtml(
+      `<div class="playtest-card is-board${stueck.tapped ? " is-tapped" : ""}${stueck.istToken ? " is-token" : ""}${playtestAuswahl.has(stueck.uid) ? " is-selected" : ""}" data-uid="${escapeHtml(
         stueck.uid
       )}" style="left: ${left}px; top: ${top}px" title="${escapeHtml(stueck.name)}">
         ${
@@ -3868,8 +3881,12 @@ let zug = null;
 // weil dann nie ein pointerup mehr kommt.
 function playtestZugAbbrechen() {
   zug?.schatten?.remove();
-  zug?.quelle?.classList.remove("is-source");
+  for (const el of els.playtestView.querySelectorAll(".is-source")) {
+    el.classList.remove("is-source");
+  }
   zug = null;
+  rahmen?.el?.remove();
+  rahmen = null;
 }
 
 // Die Zonen, die sich beim Ziehen hervorheben lassen. Das Spielfeld
@@ -3909,10 +3926,126 @@ function playtestZoneAn(x, y) {
   return null;
 }
 
+// --- Auswahlrahmen --------------------------------------------------------
+// Auf freier Fläche des Spielfelds aufgezogen, wählt der Rahmen alle
+// Karten darunter aus. Ausgewählte Karten verhalten sich, als läge der
+// Zeiger auf jeder von ihnen: Ein Klick tappt alle, Ziehen bewegt alle,
+// die Tastenkürzel treffen alle. Mit Umschalt ergänzt ein neuer Rahmen
+// die bisherige Auswahl, statt sie zu ersetzen.
+
+let rahmen = null;
+
+// Setzt die Markierung direkt an den Karten, ohne alles neu zu zeichnen.
+// Beim Aufziehen des Rahmens passiert das bei jeder Mausbewegung.
+function zeigeAuswahl() {
+  for (const el of els.playtestBoard.querySelectorAll(".playtest-card.is-board")) {
+    el.classList.toggle("is-selected", playtestAuswahl.has(el.dataset.uid));
+  }
+}
+
+function auswahlLeeren() {
+  if (!playtestAuswahl.size) {
+    return false;
+  }
+  playtestAuswahl.clear();
+  zeigeAuswahl();
+  return true;
+}
+
+// Ausgewählt bleibt nur, was noch auf dem Spielfeld liegt.
+function auswahlBereinigen() {
+  const aufFeld = new Set(playtest.board.map((stueck) => stueck.uid));
+  for (const uid of [...playtestAuswahl]) {
+    if (!aufFeld.has(uid)) {
+      playtestAuswahl.delete(uid);
+    }
+  }
+}
+
+function rahmenStart(event) {
+  // Nur auf freier Fläche: nicht in Bibliothek und Commander, nicht im
+  // Mana-Zähler.
+  if (
+    !els.playtestBoard.contains(event.target) ||
+    event.target.closest(".playtest-zones, .pt-mana")
+  ) {
+    return;
+  }
+  schliessePlaytestMenu();
+  rahmen = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    el: null,
+    basis: event.shiftKey ? new Set(playtestAuswahl) : new Set()
+  };
+  try {
+    els.playtestBoard.setPointerCapture?.(event.pointerId);
+  } catch {
+    // egal
+  }
+}
+
+function rahmenBewegung(event) {
+  const weit = Math.abs(event.clientX - rahmen.startX) + Math.abs(event.clientY - rahmen.startY);
+  if (!rahmen.el && weit < 5) {
+    return;
+  }
+  const brett = els.playtestBoard.getBoundingClientRect();
+  if (!rahmen.el) {
+    rahmen.el = document.createElement("div");
+    rahmen.el.className = "pt-rahmen";
+    els.playtestBoard.appendChild(rahmen.el);
+  }
+  // Der Rahmen bleibt innerhalb des Spielfelds, auch wenn der Zeiger
+  // darüber hinausfährt.
+  const x = Math.min(Math.max(event.clientX, brett.left), brett.right);
+  const y = Math.min(Math.max(event.clientY, brett.top), brett.bottom);
+  const links = Math.min(rahmen.startX, x);
+  const oben = Math.min(rahmen.startY, y);
+  const rechts = Math.max(rahmen.startX, x);
+  const unten = Math.max(rahmen.startY, y);
+  Object.assign(rahmen.el.style, {
+    left: `${links - brett.left}px`,
+    top: `${oben - brett.top}px`,
+    width: `${rechts - links}px`,
+    height: `${unten - oben}px`
+  });
+
+  // Getroffen ist jede Karte, die der Rahmen auch nur berührt.
+  playtestAuswahl.clear();
+  for (const uid of rahmen.basis) {
+    playtestAuswahl.add(uid);
+  }
+  for (const el of els.playtestBoard.querySelectorAll(".playtest-card.is-board")) {
+    const r = el.getBoundingClientRect();
+    if (r.left < rechts && r.right > links && r.top < unten && r.bottom > oben) {
+      playtestAuswahl.add(el.dataset.uid);
+    }
+  }
+  zeigeAuswahl();
+}
+
+function rahmenEnde() {
+  const aufgezogen = Boolean(rahmen.el);
+  rahmen.el?.remove();
+  const basis = rahmen.basis;
+  rahmen = null;
+  // Ein blosser Klick auf freie Fläche hebt die Auswahl auf.
+  if (!aufgezogen && !basis.size) {
+    auswahlLeeren();
+  }
+  if (playtestAuswahl.size > 1) {
+    setPlaytestHinweis(t("{count} Karten ausgewählt.", { count: playtestAuswahl.size }));
+  }
+}
+
+// --- Ziehen und Klicken ---------------------------------------------------
+
 function playtestZeigerStart(event) {
   // Ein zweiter Finger darf einen laufenden Zug nicht übernehmen, sonst
   // verliert der erste seine Zuordnung und sein Schatten bleibt hängen.
-  if (zug) {
+  if (zug || rahmen) {
     return;
   }
   // Nur die primäre Maustaste zieht; rechte oder mittlere Klicks sollen
@@ -3922,15 +4055,29 @@ function playtestZeigerStart(event) {
   }
 
   const karte = event.target.closest(".playtest-card");
-  if (!karte || !els.playtestView.contains(karte)) {
+  if (!karte) {
+    rahmenStart(event);
+    return;
+  }
+  if (!els.playtestView.contains(karte)) {
     return;
   }
 
   schliessePlaytestMenu();
+  const uid = karte.dataset.uid || null;
+  // Gehört die Karte zur Auswahl, zieht sie die ganze Gruppe mit. Eine
+  // Karte ausserhalb der Auswahl anzufassen, hebt die Auswahl auf.
+  const gruppe =
+    uid && playtestAuswahl.has(uid) && playtestAuswahl.size > 1 ? [...playtestAuswahl] : null;
+  if (!gruppe && uid && !playtestAuswahl.has(uid)) {
+    auswahlLeeren();
+  }
+
   const rect = karte.getBoundingClientRect();
   zug = {
     pointerId: event.pointerId,
-    uid: karte.dataset.uid || null,
+    uid,
+    gruppe,
     ausBibliothek: karte.dataset.draw === "1",
     startX: event.clientX,
     startY: event.clientY,
@@ -3950,7 +4097,19 @@ function playtestZeigerStart(event) {
   }
 }
 
+// Die Elemente aller Karten einer Gruppe, um sie beim Ziehen blass zu
+// zeigen und danach wieder aufzuhellen.
+function gruppenElemente(gruppe) {
+  return [...els.playtestBoard.querySelectorAll(".playtest-card.is-board")].filter((el) =>
+    gruppe.includes(el.dataset.uid)
+  );
+}
+
 function playtestZeigerBewegung(event) {
+  if (rahmen && event.pointerId === rahmen.pointerId) {
+    rahmenBewegung(event);
+    return;
+  }
   if (!zug || event.pointerId !== zug.pointerId) return;
   const weit = Math.abs(event.clientX - zug.startX) + Math.abs(event.clientY - zug.startY);
   if (!zug.bewegt && weit < 6) {
@@ -3960,16 +4119,25 @@ function playtestZeigerBewegung(event) {
     zug.bewegt = true;
     zug.schatten = zug.quelle.cloneNode(true);
     zug.schatten.classList.add("is-dragging");
-    zug.schatten.classList.remove("is-tapped", "is-source", "is-board");
+    zug.schatten.classList.remove("is-tapped", "is-source", "is-board", "is-selected");
     // Der Schatten hat eine feste Breite, die Karte in einer Zone aber
     // die Breite ihrer Zone. Ohne diese Übernahme spränge sie beim
     // Anfassen auf eine andere Grösse. offsetWidth statt der Masse aus
     // getBoundingClientRect, weil eine getappte Karte um 90 Grad gedreht
     // ist und dort Breite und Höhe vertauscht zurückkämen.
     zug.schatten.style.width = `${zug.quelle.offsetWidth}px`;
+    // Bei einer Gruppe zeigt der Schatten, wie viele mitgehen.
+    if (zug.gruppe) {
+      zug.schatten.insertAdjacentHTML(
+        "beforeend",
+        `<span class="pt-anzahl">${zug.gruppe.length}</span>`
+      );
+    }
     document.body.appendChild(zug.schatten);
-    // Der Platz, von dem die Karte kommt, bleibt blass sichtbar.
-    zug.quelle.classList.add("is-source");
+    // Die Plätze, von denen die Karten kommen, bleiben blass sichtbar.
+    for (const el of zug.gruppe ? gruppenElemente(zug.gruppe) : [zug.quelle]) {
+      el.classList.add("is-source");
+    }
   }
   zug.schatten.style.left = `${event.clientX - zug.griffX}px`;
   zug.schatten.style.top = `${event.clientY - zug.griffY}px`;
@@ -3985,32 +4153,131 @@ function playtestZeigerBewegung(event) {
   }
 }
 
+// Wohin auf dem Spielfeld? Als Anteil an der freien Fläche statt in
+// festen Pixeln, geklemmt auf 0..1: Der Ablageort bleibt so immer
+// innerhalb des Bretts, auch wenn weit aussen am Kartenrand gegriffen
+// wurde.
+function brettAnteil(clientX, clientY, griffX, griffY) {
+  const brett = els.playtestBoard.getBoundingClientRect();
+  const nutzbarB = Math.max(0, brett.width - BOARD_CARD_W);
+  const nutzbarH = Math.max(0, brett.height - BOARD_CARD_H);
+  const rohX = clientX - brett.left - griffX;
+  const rohY = clientY - brett.top - griffY;
+  return {
+    xAnteil: nutzbarB > 0 ? Math.min(1, Math.max(0, rohX / nutzbarB)) : 0,
+    yAnteil: nutzbarH > 0 ? Math.min(1, Math.max(0, rohY / nutzbarH)) : 0
+  };
+}
+
+const auf01 = (wert) => Math.min(1, Math.max(0, wert));
+
+// Eine Gruppe ablegen. Auf dem Spielfeld wandert sie als Ganzes, jede
+// Karte um dieselbe Strecke; ihre Lage zueinander bleibt erhalten. In
+// jeder anderen Zone landen alle Karten dort, Spielsteine verschwinden.
+function gruppeAblegen(gruppe, uid, zone, event, griffX, griffY) {
+  if (zone === "board" || zone === "commander") {
+    const gegriffen = playtest.board.find((stueck) => stueck.uid === uid);
+    if (!gegriffen) {
+      return;
+    }
+    const neu = brettAnteil(event.clientX, event.clientY, griffX, griffY);
+    const dx = neu.xAnteil - (gegriffen.xAnteil ?? 0);
+    const dy = neu.yAnteil - (gegriffen.yAnteil ?? 0);
+    for (const stueck of playtest.board) {
+      if (gruppe.includes(stueck.uid)) {
+        stueck.xAnteil = auf01((stueck.xAnteil ?? 0) + dx);
+        stueck.yAnteil = auf01((stueck.yAnteil ?? 0) + dy);
+      }
+    }
+    return;
+  }
+
+  playtestMehrereVerschieben(gruppe, zone);
+}
+
+// Schickt mehrere Karten vom Spielfeld in eine Zone. Gemeinsam genutzt
+// vom Ziehen einer Gruppe und von den Tastenkürzeln. Spielsteine zählen
+// nicht als Karten, die irgendwo ankommen: Sie verschwinden, und die
+// Meldung sagt das getrennt.
+function playtestMehrereVerschieben(uids, zone) {
+  let karten = 0;
+  let steine = 0;
+  // In der Reihenfolge des Spielfelds, damit auch der Stapel in der
+  // Zielzone eine nachvollziehbare Reihenfolge bekommt.
+  for (const stueck of playtest.board.filter((eintrag) => uids.includes(eintrag.uid))) {
+    const entnommen = playtestEntnehmen(stueck.uid);
+    if (entnommen?.istToken) steine += 1;
+    else karten += 1;
+    playtestEinfuegen(entnommen, zone);
+  }
+  auswahlBereinigen();
+  const teile = [];
+  if (karten) {
+    teile.push(
+      t(karten === 1 ? "{count} Karte nach {zone}." : "{count} Karten nach {zone}.", {
+        count: karten,
+        zone: t(PT_ZONEN[zone].label)
+      })
+    );
+  }
+  if (steine) {
+    teile.push(
+      t(steine === 1 ? "{count} Spielstein verschwindet." : "{count} Spielsteine verschwinden.", {
+        count: steine
+      })
+    );
+  }
+  setPlaytestHinweis(teile.join(" "));
+}
+
 function playtestZeigerEnde(event) {
+  if (rahmen && event.pointerId === rahmen.pointerId) {
+    rahmenEnde();
+    return;
+  }
   if (!zug || event.pointerId !== zug.pointerId) return;
-  const { uid, ausBibliothek, bewegt, schatten, griffX, griffY, quelle } = zug;
+  const { uid, gruppe, ausBibliothek, bewegt, schatten, griffX, griffY, quelle } = zug;
   zug = null;
   schatten?.remove();
   quelle?.classList.remove("is-source");
+  for (const el of els.playtestView.querySelectorAll(".is-source")) {
+    el.classList.remove("is-source");
+  }
   for (const el of PT_ZIELE) {
     el?.classList.remove("is-ziel");
   }
 
-  // Klick ohne Bewegung: aus der Bibliothek ziehen, sonst tappen.
+  // Klick ohne Bewegung: aus der Bibliothek ziehen, sonst tappen. Bei
+  // einer Gruppe richten sich alle nach der angeklickten Karte, statt
+  // dass jede für sich umschlägt - sonst stünden gemischte Gruppen nach
+  // dem Klick wieder gemischt da.
   if (!bewegt) {
     if (ausBibliothek) {
       playtestZiehen(1);
       return;
     }
     const stueck = playtest.board.find((eintrag) => eintrag.uid === uid);
-    if (stueck) {
-      stueck.tapped = !stueck.tapped;
-      renderPlaytest();
+    if (!stueck) {
+      return;
     }
+    const neu = !stueck.tapped;
+    for (const eintrag of playtest.board) {
+      if (gruppe ? gruppe.includes(eintrag.uid) : eintrag.uid === uid) {
+        eintrag.tapped = neu;
+      }
+    }
+    renderPlaytest();
     return;
   }
 
   const zone = playtestZoneAn(event.clientX, event.clientY);
   if (!zone) {
+    renderPlaytest();
+    return;
+  }
+
+  if (gruppe) {
+    gruppeAblegen(gruppe, uid, zone, event, griffX, griffY);
     renderPlaytest();
     return;
   }
@@ -4026,18 +4293,7 @@ function playtestZeigerEnde(event) {
   const ziel = zone === "commander" && !String(stueck.uid).startsWith("cmd#") ? "board" : zone;
 
   if (ziel === "board") {
-    // Anteil an der freien Fläche statt fester Pixel, geklemmt auf 0..1:
-    // Der Ablageort bleibt so immer innerhalb des Bretts, auch wenn beim
-    // Anfassen weit aussen am Kartenrand gegriffen wurde.
-    const brett = els.playtestBoard.getBoundingClientRect();
-    const nutzbarB = Math.max(0, brett.width - BOARD_CARD_W);
-    const nutzbarH = Math.max(0, brett.height - BOARD_CARD_H);
-    const rohX = event.clientX - brett.left - griffX;
-    const rohY = event.clientY - brett.top - griffY;
-    playtestEinfuegen(stueck, "board", {
-      xAnteil: nutzbarB > 0 ? Math.min(1, Math.max(0, rohX / nutzbarB)) : 0,
-      yAnteil: nutzbarH > 0 ? Math.min(1, Math.max(0, rohY / nutzbarH)) : 0
-    });
+    playtestEinfuegen(stueck, "board", brettAnteil(event.clientX, event.clientY, griffX, griffY));
   } else {
     playtestEinfuegen(stueck, ziel);
     setPlaytestHinweis(
@@ -4050,6 +4306,64 @@ function playtestZeigerEnde(event) {
     );
   }
   renderPlaytest();
+}
+
+// --- Mana-Zähler ----------------------------------------------------------
+// Zählt freies Mana je Farbe mit. Die obere Hälfte eines Symbols zählt
+// eins dazu, die untere eins weg. Ein neuer Zug setzt alles auf 0. Das
+// Kreuzchen klappt den Zähler bis auf seine Überschrift zu; wie er stand,
+// bleibt für den nächsten Besuch erhalten.
+
+const MANA_FARBEN = ["W", "U", "B", "R", "G", "C"];
+const MANA_ZU_KEY = "remasurium.manaZu";
+
+function zeigeMana() {
+  for (const farbe of MANA_FARBEN) {
+    const feld = els.playtestManaList.querySelector(`[data-mana="${farbe}"]`);
+    if (!feld) continue;
+    feld.querySelector(".pt-mana-zahl").textContent = playtest.mana[farbe];
+    // Leere Farben treten zurück, damit das Auge bei dem bleibt, was da ist.
+    feld.classList.toggle("is-leer", !playtest.mana[farbe]);
+  }
+}
+
+function manaLeeren() {
+  for (const farbe of MANA_FARBEN) {
+    playtest.mana[farbe] = 0;
+  }
+  zeigeMana();
+}
+
+// Die Symbole kommen von Scryfall, wie die Kartenbilder auch. Lädt eines
+// nicht, steht an seiner Stelle ein farbiger Kreis mit dem Buchstaben.
+function baueMana() {
+  els.playtestManaList.innerHTML = MANA_FARBEN.map(
+    (farbe) => `
+      <button type="button" class="pt-mana-feld is-leer" data-mana="${farbe}" title="${escapeHtml(
+        t("Obere Hälfte +1, untere −1")
+      )}">
+        <span class="pt-mana-symbol pt-mana-${farbe}">
+          <img src="https://svgs.scryfall.io/card-symbols/${farbe}.svg" alt="${farbe}" draggable="false" />
+          <span class="pt-mana-ersatz">${farbe}</span>
+        </span>
+        <span class="pt-mana-zahl">0</span>
+      </button>
+    `
+  ).join("");
+  for (const img of els.playtestManaList.querySelectorAll("img")) {
+    img.addEventListener("error", () => img.parentElement.classList.add("ohne-bild"), { once: true });
+  }
+}
+
+function setzeManaZu(zu) {
+  els.playtestMana.classList.toggle("is-zu", zu);
+  els.playtestManaToggle.textContent = zu ? "+" : "×";
+  els.playtestManaToggle.setAttribute("aria-expanded", zu ? "false" : "true");
+  try {
+    localStorage.setItem(MANA_ZU_KEY, zu ? "1" : "0");
+  } catch {
+    // Ohne Ablage gilt der Zustand eben nur für diesen Besuch.
+  }
 }
 
 // --- Öffnen und Schliessen ------------------------------------------------
@@ -5293,7 +5607,7 @@ els.playtestView.addEventListener("contextmenu", (event) => {
     zeigePlaytestMenu(event.clientX, event.clientY, bibliothekMenuEintraege());
     return;
   }
-  if (els.playtestBoard.contains(event.target)) {
+  if (els.playtestBoard.contains(event.target) && !event.target.closest(".pt-mana")) {
     event.preventDefault();
     zeigePlaytestMenu(event.clientX, event.clientY, spielfeldMenuEintraege());
   }
@@ -5372,7 +5686,23 @@ const PT_TASTEN_ZONEN = { e: "exile", g: "graveyard", l: "library", h: "hand" };
 
 function playtestTastenZug(taste) {
   const zone = PT_TASTEN_ZONEN[taste];
-  if (!zone || !ueberfahreneKarte) {
+  if (!zone) {
+    return false;
+  }
+  // Mit einer Auswahl trifft das Kürzel alle ausgewählten Karten, als läge
+  // der Zeiger auf jeder von ihnen. Nur wer gezielt auf eine Karte
+  // ausserhalb der Auswahl zeigt, meint diese eine.
+  const gruppe =
+    playtestAuswahl.size && (!ueberfahreneKarte || playtestAuswahl.has(ueberfahreneKarte))
+      ? [...playtestAuswahl]
+      : null;
+  if (gruppe) {
+    playtestMehrereVerschieben(gruppe, zone);
+    ueberfahreneKarte = null;
+    renderPlaytest();
+    return true;
+  }
+  if (!ueberfahreneKarte) {
     return false;
   }
   const stueck = playtestVerschiebe(ueberfahreneKarte, zone);
@@ -5389,6 +5719,32 @@ function playtestTastenZug(taste) {
   );
   return true;
 }
+
+baueMana();
+setzeManaZu((() => {
+  try {
+    return localStorage.getItem(MANA_ZU_KEY) === "1";
+  } catch {
+    return false;
+  }
+})());
+
+els.playtestManaToggle.addEventListener("click", () => {
+  setzeManaZu(!els.playtestMana.classList.contains("is-zu"));
+});
+
+// Obere Hälfte des Feldes zählt dazu, untere weg. Unter 0 geht es nicht.
+els.playtestManaList.addEventListener("click", (event) => {
+  const feld = event.target.closest("[data-mana]");
+  if (!feld) {
+    return;
+  }
+  const masse = feld.getBoundingClientRect();
+  const farbe = feld.dataset.mana;
+  const plus = event.clientY < masse.top + masse.height / 2;
+  playtest.mana[farbe] = Math.max(0, playtest.mana[farbe] + (plus ? 1 : -1));
+  zeigeMana();
+});
 
 els.playtestCardsSearch.addEventListener("input", filterePlaytestKarten);
 
@@ -5425,7 +5781,7 @@ els.playtestCardsGrid.addEventListener("pointerleave", () => {
 window.addEventListener("pointermove", playtestZeigerBewegung);
 window.addEventListener("pointerup", playtestZeigerEnde);
 window.addEventListener("pointercancel", (event) => {
-  if (zug && event.pointerId === zug.pointerId) {
+  if ((zug && event.pointerId === zug.pointerId) || (rahmen && event.pointerId === rahmen.pointerId)) {
     playtestZugAbbrechen();
   }
 });
@@ -5470,6 +5826,8 @@ window.addEventListener("keydown", (event) => {
       schliessePlaytestMenu();
     } else if (els.playtestCardsModal.classList.contains("open")) {
       closeModal(els.playtestCardsModal);
+    } else if (auswahlLeeren()) {
+      setPlaytestHinweis(t("Auswahl aufgehoben."));
     } else {
       closePlaytest();
     }

@@ -918,6 +918,152 @@ body.is-playtest .desk {
   display: none;
 }
 
+/* Ausgewählte Karten auf dem Spielfeld und der Rahmen, der sie fängt. */
+.playtest-card.is-selected {
+  outline: 2px solid #7fd4ff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.pt-rahmen {
+  position: absolute;
+  z-index: 4;
+  background: rgba(127, 212, 255, 0.12);
+  border: 1px solid rgba(127, 212, 255, 0.85);
+  pointer-events: none;
+}
+
+/* Zieht man eine Gruppe, sagt der Schatten, wie viele mitgehen. */
+.pt-anzahl {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  min-width: 24px;
+  padding: 2px 7px;
+  color: #fff;
+  background: #10256f;
+  border: 1px solid #9fb2ff;
+  border-radius: 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Mana-Zähler am linken Rand. Klein und halb durchsichtig, damit er
+   mitzählt, ohne das Spielfeld zu beanspruchen. */
+.pt-mana {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  padding: 5px 7px 6px;
+  color: #cfc5ee;
+  background: rgba(8, 5, 18, 0.55);
+  border: 1px solid rgba(155, 138, 209, 0.4);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.pt-mana-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pt-mana-x {
+  padding: 0 2px;
+  color: inherit;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+.pt-mana-x:hover,
+.pt-mana-x:focus-visible {
+  opacity: 1;
+}
+
+.pt-mana-liste {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.pt-mana.is-zu .pt-mana-liste {
+  display: none;
+}
+
+/* Hoch und runter zugleich: der Zeiger sagt, dass die Hälfte zählt. */
+.pt-mana-feld {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  color: inherit;
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: ns-resize;
+}
+
+.pt-mana-feld.is-leer {
+  opacity: 0.5;
+}
+
+.pt-mana-symbol {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.pt-mana-symbol img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.pt-mana-ersatz {
+  display: none;
+}
+
+.pt-mana-symbol.ohne-bild img {
+  display: none;
+}
+
+.pt-mana-symbol.ohne-bild .pt-mana-ersatz {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: #15120d;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.pt-mana-W .pt-mana-ersatz { background: #f8f1d4; }
+.pt-mana-U .pt-mana-ersatz { background: #a8d3ef; }
+.pt-mana-B .pt-mana-ersatz { background: #b9b1ac; }
+.pt-mana-R .pt-mana-ersatz { background: #eba487; }
+.pt-mana-G .pt-mana-ersatz { background: #9cd0a8; }
+.pt-mana-C .pt-mana-ersatz { background: #d4ccc8; }
+
+.pt-mana-zahl {
+  min-width: 1.4em;
+  color: #f0eaff;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
 /* Ein Spielstein ist keine Karte des Decks. Der gestrichelte Rand sagt
    das, ohne das Bild zu verdecken. */
 .playtest-card.is-token img {

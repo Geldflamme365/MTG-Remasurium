@@ -337,6 +337,22 @@ anywhere else is one key away. The grid redraws after a move, so the card
 you just sent away leaves it. The search field is deliberately not
 focused when the grid opens, or those keys would land in it as text.
 
+Drag across empty table to draw a selection box; every card it touches
+is selected and gets a light outline. Selected cards behave as if the
+pointer were on each of them at once: a click on one taps them all (they
+follow the card you clicked, so a mixed group ends up uniform rather than
+mixed again), dragging one moves them all by the same distance, and `E`,
+`G`, `L` and `H` send them all. Dropped on a zone, the whole group goes
+there. Pointing at a card outside the selection means just that card.
+Hold `Shift` while drawing to add to the selection; a click on empty
+table or `Esc` clears it.
+
+On the left edge of the table sits a small **mana count**: one row per
+colour plus colourless. Clicking the top half of a symbol adds one, the
+bottom half takes one away, never below zero. A new turn sets every
+colour back to zero. The little cross folds it down to its heading, and
+it stays that way the next time.
+
 A right-click on the table itself opens **Create token** with every token
 the deck needs. The token appears on the battlefield with a dashed
 border, since it is not a card of the deck. Move it anywhere else — drag

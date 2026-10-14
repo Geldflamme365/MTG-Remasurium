@@ -524,6 +524,15 @@
         </div>
 
         <div class="playtest-board" id="playtestBoard">
+          <!-- Mana-Zähler am linken Rand. Bewusst klein: Er soll mitzählen,
+               nicht das Spielfeld beanspruchen. -->
+          <div class="pt-mana" id="playtestMana">
+            <div class="pt-mana-kopf">
+              <span>mana count:</span>
+              <button type="button" class="pt-mana-x" id="playtestManaToggle" aria-expanded="true" title="Ein- und ausblenden" aria-label="Mana-Zähler ein- und ausblenden">&times;</button>
+            </div>
+            <div class="pt-mana-liste" id="playtestManaList"></div>
+          </div>
           <div class="playtest-hint" id="playtestHint">
             Karten aus Hand oder Bibliothek hierher ziehen. Klick tappt und enttappt.
           </div>

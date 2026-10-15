@@ -3624,9 +3624,8 @@ function renderPlaytest() {
     }
   `;
 
-  // Ein Paar liegt nebeneinander; die Zone wird dafür breiter, ein
-  // einzelner Commander sieht aus wie bisher.
-  els.playtestCommander.classList.toggle("is-paar", playtest.commanders.length > 1);
+  // Ein Paar liegt gestapelt wie die Karten der Deckansicht; das regelt
+  // allein das CSS über .playtest-commander-karten.
   els.playtestCommander.innerHTML = `
     <span class="playtest-zone-title">${escapeHtml(t("Commander"))}</span>
     ${

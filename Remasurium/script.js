@@ -122,6 +122,12 @@ const els = {
   renameDeckBtn: document.getElementById("renameDeckBtn"),
   deleteDeckBtn: document.getElementById("deleteDeckBtn"),
   backToDecksBtn: document.getElementById("backToDecksBtn"),
+  deckPrivate: document.getElementById("deckPrivate"),
+  deckPrivateTitle: document.getElementById("deckPrivateTitle"),
+  deckPrivateHeading: document.getElementById("deckPrivateHeading"),
+  deckPrivateText: document.getElementById("deckPrivateText"),
+  deckPrivateLoginBtn: document.getElementById("deckPrivateLoginBtn"),
+  deckPrivateCommunityBtn: document.getElementById("deckPrivateCommunityBtn"),
   commanderSlot: document.getElementById("commanderSlot"),
   deckCards: document.getElementById("deckCards"),
   deckTotal: document.getElementById("deckTotal"),
@@ -310,6 +316,15 @@ function routeTeile(hash) {
   return String(hash).replace(/^#\/?/, "").trim().split("/").filter(Boolean);
 }
 
+// #/decks/<kennung> zeigt ein bestimmtes Deck. "community" ist dort die
+// Liste der öffentlichen Decks und keine Kennung.
+function deckIdAusAdresse(hash = window.location.hash) {
+  const [route, zweiter] = routeTeile(hash);
+  return route?.toLowerCase() === "decks" && zweiter && zweiter !== "community"
+    ? decodeURIComponent(zweiter)
+    : null;
+}
+
 function normalizeRoute(hash) {
   const route = (routeTeile(hash)[0] || "").toLowerCase();
   return ROUTEN.has(route) ? route : "home";
@@ -379,8 +394,14 @@ function renderRoute() {
     // Der zweite Teil der Adresse entscheidet, welche Liste erscheint:
     // #/decks zeigt die eigenen, #/decks/community die öffentlichen. So
     // lässt sich beides auch verlinken.
-    showDeckOverview();
-    setDeckTab(routeTeile(window.location.hash)[1] === "community" ? "community" : "mine");
+    const deckId = deckIdAusAdresse();
+    if (deckId) {
+      // Ein geteilter Link führt direkt auf das Deck.
+      oeffneDeckAusAdresse(deckId);
+    } else {
+      showDeckOverview();
+      setDeckTab(routeTeile(window.location.hash)[1] === "community" ? "community" : "mine");
+    }
   }
 
   zeigeDecksMenu(false);
@@ -1714,11 +1735,15 @@ function renderDeckList() {
     .join("");
 
   for (const tile of els.deckList.querySelectorAll("button[data-deck]")) {
-    tile.addEventListener("click", () => openDeck(tile.dataset.deck));
+    tile.addEventListener("click", () => {
+      window.location.hash = `#/decks/${encodeURIComponent(tile.dataset.deck)}`;
+    });
   }
 
   for (const tile of els.deckList.querySelectorAll("button[data-public-deck]")) {
-    tile.addEventListener("click", () => openPublicDeck(tile.dataset.publicDeck));
+    tile.addEventListener("click", () => {
+      window.location.hash = `#/decks/${encodeURIComponent(tile.dataset.publicDeck)}`;
+    });
   }
 
   for (const btn of els.deckList.querySelectorAll("button[data-rename]")) {
@@ -1837,24 +1862,106 @@ async function refreshCommunityDecks() {
   }
 }
 
-async function openPublicDeck(deckId) {
-  setDeckStatus(t("Deck wird geladen..."), "muted");
-  try {
-    const result = await api.getPublicDeck(deckId);
-    state.deckReadOnly = true;
-    els.deckOverview.hidden = true;
-    els.deckEditor.hidden = false;
-    els.deckEditor.classList.add("is-readonly");
-    applyDeckResult(result);
+// Zeigt ein geladenes Deck im Editor, ein fremdes nur zum Ansehen. Die
+// Adresse bekommt dabei die Kennung des Decks: So führt der Link oben im
+// Browser genau hierher und lässt sich kopieren und weitergeben.
+function zeigeDeck(result, { fremd = false } = {}) {
+  state.deckReadOnly = fremd;
+  els.deckEditor.classList.toggle("is-readonly", fremd);
+  applyDeckResult(result);
+  els.deckOverview.hidden = true;
+  els.deckPrivate.hidden = true;
+  els.deckEditor.hidden = false;
+  const ziel = `#/decks/${encodeURIComponent(result.deck.id)}`;
+  if (window.location.hash !== ziel) {
+    // pushState löst kein hashchange aus, das Deck wird also nicht ein
+    // zweites Mal geladen. Zurück im Browser führt auf die Liste.
+    history.pushState(null, "", ziel);
+  }
+  if (fremd) {
     setDeckStatus(
       result.deck.owner
         ? t("Deck von {name}. Ansehen geht, ändern nicht.", { name: result.deck.owner })
         : t("Fremdes Deck. Ansehen geht, ändern nicht."),
       "muted"
     );
-  } catch (error) {
-    setDeckStatus(t("Deck konnte nicht geladen werden: {error}", { error: error.message }), "err");
+  } else {
+    setDeckStatus(`Deck geöffnet: ${result.deck.name}`, "ok");
   }
+}
+
+// Wer über einen Link auf ein privates Deck kommt, soll danach gleich
+// dort landen, sobald er sich angemeldet hat.
+let deckNachAnmeldung = null;
+let deckAusAdresseLaeuft = null;
+
+// Öffnet das Deck aus der Adresse: zuerst als eigenes, dann als
+// öffentliches. Geht beides nicht, erscheint der Hinweis, dass es privat
+// ist oder nicht mehr existiert.
+async function oeffneDeckAusAdresse(deckId) {
+  if (state.activeDeck?.id === deckId && !els.deckEditor.hidden) {
+    return;
+  }
+  deckAusAdresseLaeuft = deckId;
+  // Bis feststeht, was es wird, steht weder die Liste noch ein altes Deck da.
+  els.deckOverview.hidden = true;
+  els.deckEditor.hidden = true;
+  els.deckPrivate.hidden = true;
+  // Erst wenn klar ist, ob jemand angemeldet ist, weiss der Deckspeicher,
+  // wo er suchen soll.
+  await authBereit;
+  if (deckAusAdresseLaeuft !== deckId) return;
+
+  let eigenes = null;
+  try {
+    eigenes = await deckStore.get(deckId);
+  } catch {
+    // Kein eigenes Deck; vielleicht ein öffentliches.
+  }
+  if (deckAusAdresseLaeuft !== deckId) return;
+  if (eigenes) {
+    zeigeDeck(eigenes);
+    return;
+  }
+
+  try {
+    const result = await api.getPublicDeck(deckId);
+    if (deckAusAdresseLaeuft !== deckId) return;
+    zeigeDeck(result, { fremd: true });
+  } catch (error) {
+    if (deckAusAdresseLaeuft !== deckId) return;
+    zeigeDeckGesperrt(deckId, error.status === 403 ? "privat" : error.status === 404 ? "fehlt" : "fehler", error);
+  }
+}
+
+function zeigeDeckGesperrt(deckId, grund, error) {
+  state.activeDeck = null;
+  state.activeDeckCards = [];
+  state.deckReadOnly = false;
+  els.deckOverview.hidden = true;
+  els.deckEditor.hidden = true;
+  els.deckPrivate.hidden = false;
+
+  const angemeldet = Boolean(state.user);
+  els.deckPrivateTitle.textContent = grund === "privat" ? t("privates deck") : t("deck");
+  els.deckPrivateHeading.textContent =
+    grund === "privat"
+      ? t("Dieses Deck ist privat.")
+      : grund === "fehlt"
+        ? t("Dieses Deck gibt es nicht.")
+        : t("Das Deck konnte nicht geladen werden.");
+  els.deckPrivateText.textContent =
+    grund === "privat"
+      ? angemeldet
+        ? t("Es gehört einem anderen Konto. Ansehen kann es nur, wer es angelegt hat, solange es nicht öffentlich ist.")
+        : t("Ansehen kann es nur, wer es angelegt hat. Ist es deins, melde dich an, dann öffnet es sich.")
+      : grund === "fehlt"
+        ? t("Vielleicht wurde es gelöscht, oder der Link ist nicht vollständig.")
+        : t("Fehler: {error}", { error: error?.message || "" });
+  // Anmelden hilft nur, wenn es privat ist und noch niemand angemeldet.
+  const anmeldenHilft = grund === "privat" && !angemeldet;
+  els.deckPrivateLoginBtn.hidden = !anmeldenHilft;
+  deckNachAnmeldung = anmeldenHilft ? deckId : null;
 }
 
 // Die Knöpfe sind im Nur-Lesen-Modus ausgeblendet. Das hier hält
@@ -1934,6 +2041,7 @@ function showDeckOverview() {
   els.deckEditor.classList.remove("is-readonly");
   els.deckOverview.hidden = false;
   els.deckEditor.hidden = true;
+  els.deckPrivate.hidden = true;
   renderDeckList();
 }
 
@@ -4910,14 +5018,8 @@ function applyDeckResult(result) {
 
 async function openDeck(deckId) {
   setDeckStatus("Lade Deck...", "muted");
-  state.deckReadOnly = false;
-  els.deckEditor.classList.remove("is-readonly");
   try {
-    const result = await deckStore.get(deckId);
-    applyDeckResult(result);
-    els.deckOverview.hidden = true;
-    els.deckEditor.hidden = false;
-    setDeckStatus(`Deck geöffnet: ${result.deck.name}`, "ok");
+    zeigeDeck(await deckStore.get(deckId));
   } catch (error) {
     setDeckStatus(`Deck konnte nicht geöffnet werden: ${error.message}`, "err");
   }
@@ -4960,6 +5062,8 @@ async function deleteDeck() {
   }
   try {
     await deckStore.remove(state.activeDeck.id);
+    // Die Adresse zeigte auf das gelöschte Deck; sie führt nun zur Liste.
+    history.replaceState(null, "", "#/decks");
     showDeckOverview();
     await refreshDecks();
     setDeckStatus(`Deck "${name}" gelöscht.`, "ok");
@@ -5612,6 +5716,12 @@ async function handleLogin(event) {
     await adoptSession(data.user, { mergeLocal: true });
     els.loginForm.reset();
     setAuthStatus(`Angemeldet als ${data.user.email}.`, "ok");
+    if (deckNachAnmeldung) {
+      // Kam man von einem privaten Deck, geht es gleich dorthin zurück.
+      const deckId = deckNachAnmeldung;
+      deckNachAnmeldung = null;
+      window.location.hash = `#/decks/${encodeURIComponent(deckId)}`;
+    }
   } catch (error) {
     setAuthStatus(error.message, "err");
   }
@@ -5787,7 +5897,17 @@ els.createDeckBtn.addEventListener("click", createDeck);
 els.newDeckName.addEventListener("keydown", (event) => {
   if (event.key === "Enter") createDeck();
 });
-els.backToDecksBtn.addEventListener("click", showDeckOverview);
+// Zurück führt über die Adresse, damit sie nicht weiter auf das Deck
+// zeigt. Ein fremdes Deck kam aus den Community Decks, also dorthin.
+els.backToDecksBtn.addEventListener("click", () => {
+  window.location.hash = state.deckReadOnly ? "#/decks/community" : "#/decks";
+});
+els.deckPrivateLoginBtn.addEventListener("click", () => {
+  window.location.hash = "#/account";
+});
+els.deckPrivateCommunityBtn.addEventListener("click", () => {
+  window.location.hash = "#/decks/community";
+});
 els.deleteDeckBtn.addEventListener("click", deleteDeck);
 els.renameDeckBtn.addEventListener("click", renameDeck);
 els.deckNameInput.addEventListener("keydown", (event) => {

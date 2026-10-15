@@ -207,6 +207,17 @@ const EN = {
   "Spielstein erzeugen": "Create token",
   "Kopie": "Copy",
   "Bibliothek beim Schliessen mischen": "Shuffle library after close",
+  "privates deck": "private deck",
+  "Dieses Deck ist privat.": "This deck is private.",
+  "Dieses Deck gibt es nicht.": "This deck does not exist.",
+  "Das Deck konnte nicht geladen werden.": "The deck could not be loaded.",
+  "Es gehört einem anderen Konto. Ansehen kann es nur, wer es angelegt hat, solange es nicht öffentlich ist.":
+    "It belongs to another account. Only its creator can see it while it is not public.",
+  "Ansehen kann es nur, wer es angelegt hat. Ist es deins, melde dich an, dann öffnet es sich.":
+    "Only its creator can see it. If it is yours, log in and it will open.",
+  "Vielleicht wurde es gelöscht, oder der Link ist nicht vollständig.":
+    "It may have been deleted, or the link is incomplete.",
+  "Fehler: {error}": "Error: {error}",
   "{name} ins Spiel, Bibliothek gemischt.": "{name} onto the battlefield, library shuffled.",
   "Marke hinzufügen": "Add counter",
   "{name} umgedreht.": "{name} flipped.",

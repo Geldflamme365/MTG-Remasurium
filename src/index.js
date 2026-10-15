@@ -666,7 +666,13 @@ async function handleGetPublicDeck(env, deckId) {
     .first();
 
   if (!deck) {
-    return fail("Deck nicht gefunden oder nicht öffentlich.", 404);
+    // Wer einen geteilten Link öffnet, soll erfahren, ob es das Deck gibt
+    // und es nur privat ist, oder ob es gar nicht (mehr) da ist. Mehr als
+    // diese eine Angabe gibt ein privates Deck nicht preis.
+    const vorhanden = await env.DB.prepare("SELECT 1 FROM decks WHERE id = ?").bind(deckId).first();
+    return vorhanden
+      ? fail("Dieses Deck ist privat.", 403)
+      : fail("Deck nicht gefunden.", 404);
   }
 
   const { results } = await env.DB.prepare(

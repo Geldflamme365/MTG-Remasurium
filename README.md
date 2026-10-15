@@ -255,6 +255,21 @@ Decks that live only in your browser cannot be made public. There would be
 nothing for anyone else to fetch, so the tick box stays disabled until you
 have an account.
 
+### Sharing a deck
+
+Every open deck has its own address, `#/decks/<id>`, in the browser's
+address bar. Copy it and send it: the link opens that deck directly.
+Your own deck opens as usual; someone else's public deck opens
+read-only. The browser's back button returns to the list.
+
+If the deck is private, the link shows a screen saying so instead. Not
+logged in, it offers to log in, and once you have, the deck opens if it
+is yours. Logged in with another account, it simply says the deck
+belongs to someone else. A link to a deck that no longer exists says
+that too. To tell the two apart, `GET /decks/public/:id` answers 403
+for a private deck and 404 for a missing one; nothing else about a
+private deck leaves the server.
+
 ### Import and export
 
 Import sits in the deck overview and always makes a new deck. Export sits in

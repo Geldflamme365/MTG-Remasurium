@@ -262,6 +262,25 @@
         </article>
       </div>
 
+      <!-- Erscheint, wenn ein geteilter Link auf ein Deck zeigt, das man
+           nicht sehen darf oder das es nicht mehr gibt. -->
+      <div id="deckPrivate" hidden>
+        <article class="window panel deck-privat">
+          <div class="panel-title-bar">
+            <span id="deckPrivateTitle">privates deck</span>
+          </div>
+          <div class="panel-body">
+            <p class="deck-privat-schloss" aria-hidden="true">🔒</p>
+            <h2 id="deckPrivateHeading">Dieses Deck ist privat.</h2>
+            <p id="deckPrivateText" class="small-note"></p>
+            <div class="button-row">
+              <button id="deckPrivateLoginBtn" type="button" class="retro-button">Anmelden</button>
+              <button id="deckPrivateCommunityBtn" type="button" class="retro-button">Community Decks</button>
+            </div>
+          </div>
+        </article>
+      </div>
+
       <div id="deckEditor" hidden>
         <div class="deck-layout">
           <article class="window panel console-panel">

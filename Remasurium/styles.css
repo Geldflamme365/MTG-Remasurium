@@ -2680,3 +2680,29 @@ body.is-splitting {
     grid-template-columns: 1fr;
   }
 }
+
+/* Hinweis auf ein privates oder fehlendes Deck, schmal und mittig. */
+.deck-privat {
+  max-width: 520px;
+  margin: 40px auto;
+  text-align: center;
+}
+
+.deck-privat h2 {
+  margin: 4px 0 8px;
+  font-size: 1.25rem;
+}
+
+.deck-privat-schloss {
+  margin: 8px 0 0;
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.deck-privat .button-row {
+  justify-content: center;
+}
+
+.deck-privat button[hidden] {
+  display: none;
+}

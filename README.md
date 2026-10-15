@@ -347,9 +347,9 @@ there. Pointing at a card outside the selection means just that card.
 Hold `Shift` while drawing to add to the selection; a click on empty
 table or `Esc` clears it.
 
-On the left edge of the table sits a small **mana count**: one row per
+Just above your hand, at the left edge of the table, sits a small **mana count**: one row per
 colour plus colourless. Clicking the top half of a symbol adds one, the
-bottom half takes one away, never below zero. A new turn sets every
+bottom half takes one away, never below zero; the pointer turns into a plus or a minus to say which. A new turn sets every
 colour back to zero. The little cross folds it down to its heading, and
 it stays that way the next time.
 

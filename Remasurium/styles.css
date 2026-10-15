@@ -568,7 +568,11 @@ body.is-playtest .desk {
   gap: 0;
 }
 
+/* Beim Aufziehen eines Auswahlrahmens markierte der Browser sonst die
+   Zonentitel als Text mit. Im Playtester gibt es nichts zu markieren. */
 .playtest-page {
+  user-select: none;
+  -webkit-user-select: none;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -951,17 +955,19 @@ body.is-playtest .desk {
 
 /* Mana-Zähler am linken Rand. Klein und halb durchsichtig, damit er
    mitzählt, ohne das Spielfeld zu beanspruchen. */
+/* Unten links, direkt über der Hand: dort, wo man beim Ausspielen
+   ohnehin hinschaut. */
 .pt-mana {
   position: absolute;
-  top: 10px;
+  bottom: 10px;
   left: 10px;
   z-index: 3;
-  padding: 5px 7px 6px;
+  padding: 6px 9px 8px;
   color: #cfc5ee;
   background: rgba(8, 5, 18, 0.55);
   border: 1px solid rgba(155, 138, 209, 0.4);
   font-family: "Courier New", Courier, monospace;
-  font-size: 0.66rem;
+  font-size: 0.74rem;
   letter-spacing: 0.05em;
   user-select: none;
 }
@@ -992,25 +998,42 @@ body.is-playtest .desk {
 
 .pt-mana-liste {
   display: grid;
-  gap: 3px;
-  margin-top: 5px;
+  gap: 4px;
+  margin-top: 6px;
 }
 
 .pt-mana.is-zu .pt-mana-liste {
   display: none;
 }
 
-/* Hoch und runter zugleich: der Zeiger sagt, dass die Hälfte zählt. */
+/* Der Zeiger zeigt, was ein Klick tut: obere Hälfte ein Plus, untere ein
+   Minus. Welche Hälfte, setzt das Skript beim Überfahren. Ein Minus als
+   Zeiger kennt CSS nicht, deshalb sind beide als kleine SVG gezeichnet:
+   weiss mit schwarzem Kern, damit sie auf jedem Grund lesbar bleiben. */
 .pt-mana-feld {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   padding: 0;
   color: inherit;
   background: none;
   border: none;
   font: inherit;
-  cursor: ns-resize;
+  cursor: pointer;
+}
+
+.pt-mana-feld[data-haelfte="plus"] {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Cpath d='M11 3v16M3 11h16' stroke='white' stroke-width='6'/%3E%3Cpath d='M11 4v14M4 11h14' stroke='black' stroke-width='2.5'/%3E%3C/svg%3E")
+      11 11,
+    pointer;
+}
+
+.pt-mana-feld[data-haelfte="minus"] {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Cpath d='M3 11h16' stroke='white' stroke-width='6'/%3E%3Cpath d='M4 11h14' stroke='black' stroke-width='2.5'/%3E%3C/svg%3E")
+      11 11,
+    pointer;
 }
 
 .pt-mana-feld.is-leer {
@@ -1021,8 +1044,8 @@ body.is-playtest .desk {
   position: relative;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
 }
 
 .pt-mana-symbol img {
@@ -1060,7 +1083,7 @@ body.is-playtest .desk {
 .pt-mana-zahl {
   min-width: 1.4em;
   color: #f0eaff;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   text-align: left;
 }
 

@@ -3971,6 +3971,8 @@ function rahmenStart(event) {
   ) {
     return;
   }
+  // Ohne das beginnt der Browser beim Ziehen eine Textauswahl.
+  event.preventDefault();
   schliessePlaytestMenu();
   rahmen = {
     pointerId: event.pointerId,
@@ -5733,15 +5735,36 @@ els.playtestManaToggle.addEventListener("click", () => {
   setzeManaZu(!els.playtestMana.classList.contains("is-zu"));
 });
 
-// Obere Hälfte des Feldes zählt dazu, untere weg. Unter 0 geht es nicht.
+// Obere Hälfte des Feldes zählt dazu, untere weg. Zeiger und Klick
+// rechnen mit derselben Funktion, damit das Plus am Zeiger auch wirklich
+// ein Plus bewirkt.
+function manaHaelfte(feld, clientY) {
+  const masse = feld.getBoundingClientRect();
+  return clientY < masse.top + masse.height / 2 ? "plus" : "minus";
+}
+
+els.playtestManaList.addEventListener("pointermove", (event) => {
+  const feld = event.target.closest("[data-mana]");
+  if (feld) {
+    feld.dataset.haelfte = manaHaelfte(feld, event.clientY);
+  }
+});
+
+els.playtestManaList.addEventListener("pointerout", (event) => {
+  const feld = event.target.closest("[data-mana]");
+  if (feld && !feld.contains(event.relatedTarget)) {
+    delete feld.dataset.haelfte;
+  }
+});
+
+// Unter 0 geht es nicht.
 els.playtestManaList.addEventListener("click", (event) => {
   const feld = event.target.closest("[data-mana]");
   if (!feld) {
     return;
   }
-  const masse = feld.getBoundingClientRect();
   const farbe = feld.dataset.mana;
-  const plus = event.clientY < masse.top + masse.height / 2;
+  const plus = manaHaelfte(feld, event.clientY) === "plus";
   playtest.mana[farbe] = Math.max(0, playtest.mana[farbe] + (plus ? 1 : -1));
   zeigeMana();
 });

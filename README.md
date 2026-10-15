@@ -310,6 +310,15 @@ Point at a card and a single key sends it somewhere, no dragging needed:
 | `G` | Graveyard |
 | `L` | Top of the library |
 | `H` | Hand |
+| `C` | A copy on the battlefield (see below) |
+
+`C` copies the card instead of moving it. By the rules such a copy is a
+token, so it appears on the battlefield, next to the original if that is
+there, and ceases to exist once it leaves. A copy of a real card carries
+a small "Copy" label along its bottom edge to tell it from the original,
+and so does a copy of that copy, since it still goes back to a real card;
+a copy of a token is just another token and needs none. `Ctrl+C` is left
+alone for the browser.
 
 Over the library's pile those keys act on its top card. With nothing
 under the pointer they do nothing, so `D` keeps drawing as usual.

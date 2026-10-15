@@ -962,6 +962,25 @@ body.is-playtest .desk {
   pointer-events: none;
 }
 
+/* Die Kopie einer echten Karte trägt unten am Rand eine Aufschrift, damit
+   sie sich vom Original unterscheiden lässt. pointer-events: none, damit
+   sie beim Greifen, Tappen und Überfahren nicht im Weg ist. */
+.pt-kopie {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 8px;
+  color: #fff;
+  background: rgba(16, 37, 111, 0.92);
+  border: 1px solid #9fb2ff;
+  border-radius: 3px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
 /* Zieht man eine Gruppe, sagt der Schatten, wie viele mitgehen. */
 .pt-anzahl {
   position: absolute;

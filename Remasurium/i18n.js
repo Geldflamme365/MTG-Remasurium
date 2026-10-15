@@ -205,6 +205,9 @@ const EN = {
   "Wieder zugedeckt.": "Face down again.",
   "Kein Treffer.": "No match.",
   "Spielstein erzeugen": "Create token",
+  "Kopie": "Copy",
+  "Kopie von {name} erzeugt.": "Copy of {name} created.",
+  "{count} Kopien erzeugt.": "{count} copies created.",
   "Teilt sich den Platz mit {name}.": "Shares the command zone with {name}.",
   "Beide Commander-Plätze sind belegt. Setz zuerst einen mit dem Stern ab.":
     "Both commander slots are taken. Use the star to step one down first.",

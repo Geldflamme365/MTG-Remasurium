@@ -3675,6 +3675,7 @@ function renderPlaytest() {
             ? `<img src="${escapeHtml(stueck.image)}" alt="${escapeHtml(stueck.name)}" draggable="false" />`
             : `<span class="playtest-card-name">${escapeHtml(stueck.name)}</span>`
         }
+        ${stueck.istKopie ? `<span class="pt-kopie">${escapeHtml(t("Kopie"))}</span>` : ""}
       </div>`
     );
   }
@@ -5839,18 +5840,21 @@ els.playtestView.addEventListener("pointerleave", () => {
 // Library, Hand.
 const PT_TASTEN_ZONEN = { e: "exile", g: "graveyard", l: "library", h: "hand" };
 
+// Welche Karten meint ein Tastenkürzel? Mit einer Auswahl alle
+// ausgewählten, als läge der Zeiger auf jeder von ihnen. Nur wer gezielt
+// auf eine Karte ausserhalb der Auswahl zeigt, meint diese eine.
+function tastenGruppe() {
+  return playtestAuswahl.size && (!ueberfahreneKarte || playtestAuswahl.has(ueberfahreneKarte))
+    ? [...playtestAuswahl]
+    : null;
+}
+
 function playtestTastenZug(taste) {
   const zone = PT_TASTEN_ZONEN[taste];
   if (!zone) {
     return false;
   }
-  // Mit einer Auswahl trifft das Kürzel alle ausgewählten Karten, als läge
-  // der Zeiger auf jeder von ihnen. Nur wer gezielt auf eine Karte
-  // ausserhalb der Auswahl zeigt, meint diese eine.
-  const gruppe =
-    playtestAuswahl.size && (!ueberfahreneKarte || playtestAuswahl.has(ueberfahreneKarte))
-      ? [...playtestAuswahl]
-      : null;
+  const gruppe = tastenGruppe();
   if (gruppe) {
     playtestMehrereVerschieben(gruppe, zone);
     ueberfahreneKarte = null;
@@ -5871,6 +5875,67 @@ function playtestTastenZug(taste) {
     stueck.istToken && zone !== "board"
       ? t("{name} verschwindet.", { name: stueck.name })
       : t("{name} nach {zone}.", { name: stueck.name, zone: t(PT_ZONEN[zone].label) })
+  );
+  return true;
+}
+
+// --- Kopien ---------------------------------------------------------------
+// C kopiert die Karte unter dem Zeiger. Nach den Regeln ist eine solche
+// Kopie ein Spielstein: Sie entsteht auf dem Spielfeld und hört auf zu
+// existieren, sobald sie es verlässt. Ist das Original eine echte Karte,
+// trägt die Kopie unten die Aufschrift "Kopie", damit sie sich vom
+// Original unterscheiden lässt. Die Kopie eines Spielsteins ist einfach
+// ein weiterer Spielstein und braucht keine Aufschrift.
+
+// Sucht ein Stück in allen Zonen, auch in der Commander-Zone.
+function findeStueck(uid) {
+  for (const name of Object.keys(PT_ZONEN)) {
+    const stueck = PT_ZONEN[name].liste().find((eintrag) => eintrag.uid === uid);
+    if (stueck) {
+      return stueck;
+    }
+  }
+  return playtest.commanders.find((eintrag) => eintrag.uid === uid) || null;
+}
+
+function playtestKopie(original) {
+  tokenZaehler += 1;
+  // Liegt das Original auf dem Spielfeld, legt sich die Kopie leicht
+  // versetzt daneben, sonst an eine Stelle wie ein neuer Spielstein.
+  const aufFeld = playtest.board.includes(original);
+  playtestEinfuegen(
+    {
+      uid: `token#${tokenZaehler}`,
+      id: original.id,
+      name: original.name,
+      image: original.image,
+      istToken: true,
+      // Die Aufschrift hängt an der Karte dahinter: Auch die Kopie einer
+      // Kopie geht auf eine echte Karte zurück und sähe ohne Aufschrift
+      // aus wie das Original. Nur ein echter Spielstein bleibt ohne.
+      istKopie: !original.istToken || Boolean(original.istKopie)
+    },
+    "board",
+    aufFeld
+      ? { xAnteil: auf01((original.xAnteil ?? 0) + 0.03), yAnteil: auf01((original.yAnteil ?? 0) + 0.06) }
+      : { xAnteil: 0.3 + Math.random() * 0.35, yAnteil: 0.25 + Math.random() * 0.35 }
+  );
+}
+
+function playtestKopieren() {
+  const uids = tastenGruppe() || (ueberfahreneKarte ? [ueberfahreneKarte] : []);
+  const originale = uids.map(findeStueck).filter(Boolean);
+  if (!originale.length) {
+    return false;
+  }
+  for (const original of originale) {
+    playtestKopie(original);
+  }
+  renderPlaytest();
+  setPlaytestHinweis(
+    originale.length === 1
+      ? t("Kopie von {name} erzeugt.", { name: originale[0].name })
+      : t("{count} Kopien erzeugt.", { count: originale.length })
   );
   return true;
 }
@@ -5977,6 +6042,11 @@ window.addEventListener("keydown", (event) => {
   // Zone. Das geht den übrigen Kürzeln vor, aber nur wenn wirklich eine
   // Karte unter dem Zeiger liegt - sonst bliebe etwa H ohne Wirkung.
   if (!event.ctrlKey && !event.metaKey && !event.shiftKey && playtestTastenZug(taste)) {
+    event.preventDefault();
+    return;
+  }
+  // C kopiert, aber nur ohne Strg: Strg+C bleibt das Kopieren des Browsers.
+  if (taste === "c" && !event.ctrlKey && !event.metaKey && !event.shiftKey && playtestKopieren()) {
     event.preventDefault();
     return;
   }

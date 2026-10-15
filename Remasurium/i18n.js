@@ -205,6 +205,11 @@ const EN = {
   "Wieder zugedeckt.": "Face down again.",
   "Kein Treffer.": "No match.",
   "Spielstein erzeugen": "Create token",
+  "Teilt sich den Platz mit {name}.": "Shares the command zone with {name}.",
+  "Beide Commander-Plätze sind belegt. Setz zuerst einen mit dem Stern ab.":
+    "Both commander slots are taken. Use the star to step one down first.",
+  "{name} ist jetzt Partner-Commander.": "{name} is now the partner commander.",
+  "{a} und {b} dürfen nicht gemeinsam Commander sein.": "{a} and {b} cannot be commanders together.",
   "{count} Karten ausgewählt.": "{count} cards selected.",
   "Auswahl aufgehoben.": "Selection cleared.",
   "{count} Karte nach {zone}.": "{count} card to {zone}.",

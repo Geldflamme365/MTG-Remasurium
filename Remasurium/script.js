@@ -1246,7 +1246,7 @@ function renderVersionModal() {
           await applyDeckVersion(selectedPrint);
         } else if (targetContext === "commander") {
           closeVersionModal();
-          await applyCommanderVersion(selectedPrint);
+          await applyCommanderVersion(selectedPrint, state.versionSlot || "commander");
         } else if (targetContext === "search") {
           await selectSearchCard(selectedPrint);
         } else {
@@ -1653,15 +1653,17 @@ function renderDeckList() {
 
   els.deckList.innerHTML = decks
     .map((deck) => {
-      // Der Commander zählt beim Preis mit wie bei der Kartenzahl.
+      // Commander und Partner zählen beim Preis mit wie bei der Kartenzahl.
       const preis = preisSumme([
         ...(deck.cards || []),
-        ...(deck.commander ? [{ id: deck.commander.id, quantity: 1 }] : [])
+        ...deckCommanders(deck).map((karte) => ({ id: karte.id, quantity: 1 }))
       ]);
       const info = `${t(deck.cardCount === 1 ? "{count} Karte" : "{count} Karten", {
         count: deck.cardCount
       })} · ${escapeHtml(preisText(preis))}${
-        deck.commander ? ` · ${escapeHtml(deck.commander.name)}` : ""
+        deck.commander
+          ? ` · ${escapeHtml(deckCommanders(deck).map((karte) => karte.name).join(" & "))}`
+          : ""
       }${fremd && deck.owner ? ` · ${escapeHtml(deck.owner)}` : ""}`;
 
       // Ein fremdes Deck lässt sich nur öffnen, nicht umbenennen.
@@ -1910,7 +1912,7 @@ async function deckSichtbarkeitAendern() {
 async function ladeDeckPreise() {
   const ids = aktuelleDeckListe().flatMap((deck) => [
     ...(deck.cards || []).map((karte) => karte.id),
-    ...(deck.commander ? [deck.commander.id] : [])
+    ...deckCommanders(deck).map((karte) => karte.id)
   ]);
   if (!ids.length) {
     return;
@@ -1933,55 +1935,130 @@ function showDeckOverview() {
   renderDeckList();
 }
 
-function renderCommanderSlot() {
-  const commander = state.activeDeck?.commander;
+// --- Commander und Partner ------------------------------------------------
+// Ein Deck hat einen Commander und kann einen zweiten haben, wenn beide
+// sich den Platz teilen dürfen: Partner, Friends forever, Choose a
+// Background und Verwandte. Überall, wo gezählt, gefärbt oder geprüft
+// wird, gilt die Liste beider. Mit nur einem Commander sieht alles aus
+// wie zuvor.
 
-  const rot = commander && state.deckProblemCards.has(commander.id) ? " is-illegal" : "";
+const COMMANDER_PLAETZE = ["commander", "partner"];
 
-  els.commanderSlot.innerHTML = `
+function deckCommanders(deck = state.activeDeck) {
+  return [deck?.commander, deck?.partner].filter(Boolean);
+}
+
+// Die Farbidentität eines Paars ist die Vereinigung beider. Ist sie für
+// einen der beiden nicht bekannt, gilt sie als unbekannt: Lieber gar
+// nicht prüfen als gegen einen halben Rahmen.
+function commanderIdentitaet() {
+  const commanders = deckCommanders();
+  if (!commanders.length) {
+    return null;
+  }
+  const farben = new Set();
+  for (const karte of commanders) {
+    const eigene = cardInfoCache.get(karte.id)?.colorIdentity;
+    if (!eigene) {
+      return null;
+    }
+    for (const farbe of eigene) {
+      farben.add(farbe);
+    }
+  }
+  return ["W", "U", "B", "R", "G"].filter((farbe) => farben.has(farbe));
+}
+
+// Dürfen diese zwei sich den Commander-Platz teilen? true, false, oder
+// null, wenn es sich nicht sagen lässt, weil Scryfall die
+// Schlüsselwörter einer der beiden Karten nicht kennt.
+function partnerPaarGueltig(a, b) {
+  const ka = cardInfoCache.get(a.id);
+  const kb = cardInfoCache.get(b.id);
+  if (!Array.isArray(ka?.keywords) || !Array.isArray(kb?.keywords)) {
+    return null;
+  }
+  const hat = (info, wort) => info.keywords.includes(wort);
+  const beide = (wort) => hat(ka, wort) && hat(kb, wort);
+  const einerMitTyp = (wort, typ) =>
+    (hat(ka, wort) && hatTyp(kb.typeLine || "", typ)) || (hat(kb, wort) && hatTyp(ka.typeLine || "", typ));
+
+  return (
+    beide("Partner") ||
+    beide("Partner with") ||
+    beide("Friends forever") ||
+    einerMitTyp("Choose a background", "Background") ||
+    einerMitTyp("Doctor's companion", "Doctor")
+  );
+}
+
+// Ein Eintrag im Commander-Feld: Bild, Name, Knöpfe. Bei einem einzelnen
+// Commander genau der Aufbau von früher, bei zweien steht derselbe
+// Eintrag zweimal nebeneinander.
+function commanderEintragHtml(karte, platz) {
+  const rot = state.deckProblemCards.has(karte.id) ? " is-illegal" : "";
+  const bezeichnung = platz === "partner" ? "Partner" : "Commander";
+  const hinweis =
+    platz === "partner"
+      ? t("Teilt sich den Platz mit {name}.", { name: state.activeDeck.commander?.name || "" })
+      : "Sein Bild steht in der Übersicht für dieses Deck.";
+  return `
     ${
-      commander?.image
-        ? `<button type="button" class="deck-card-thumb${rot}" id="commanderVersionBtn" title="Version von ${escapeHtml(
-            commander.name || "Commander"
-          )} wechseln" aria-label="Version des Commanders wechseln"><img src="${escapeHtml(
-            commander.image
-          )}" alt="${escapeHtml(commander.name || "Commander")}" /></button>`
+      karte.image
+        ? `<button type="button" class="deck-card-thumb${rot}" data-commander-version="${platz}" title="Version von ${escapeHtml(
+            karte.name
+          )} wechseln" aria-label="Version von ${escapeHtml(karte.name)} wechseln"><img src="${escapeHtml(
+            karte.image
+          )}" alt="${escapeHtml(karte.name)}" /></button>`
         : `<span class="commander-empty">?</span>`
     }
     <div>
-      <span class="field-label">Commander</span>
-      <strong>${commander ? escapeHtml(commander.name) : "Noch keiner gewählt"}</strong>
-      <p class="small-note">${
-        commander
-          ? "Sein Bild steht in der Übersicht für dieses Deck."
-          : "Mit dem Stern bei einer Karte im Deck festlegen."
-      }</p>
-      ${
-        commander
-          ? `<div class="button-row">
-               <button type="button" id="demoteCommanderBtn" class="retro-button commander-star" title="${t("Als Commander entfernen")}" aria-label="${t("Als Commander entfernen")}">★</button>
-               <button type="button" id="removeCommanderBtn" class="retro-button">Karte entfernen</button>
-             </div>`
-          : `<div class="button-row">
-               <button type="button" id="customCommanderBtn" class="retro-button">Eigener Commander</button>
-             </div>`
-      }
+      <span class="field-label">${bezeichnung}</span>
+      <strong>${escapeHtml(karte.name)}</strong>
+      <p class="small-note">${escapeHtml(hinweis)}</p>
+      <div class="button-row">
+        <button type="button" data-commander-absetzen="${platz}" class="retro-button commander-star" title="${t("Als Commander entfernen")}" aria-label="${t("Als Commander entfernen")}">★</button>
+        <button type="button" data-commander-entfernen="${platz}" class="retro-button">Karte entfernen</button>
+      </div>
     </div>
   `;
+}
 
-  const demoteBtn = els.commanderSlot.querySelector("#demoteCommanderBtn");
-  if (demoteBtn) {
-    demoteBtn.addEventListener("click", demoteCommander);
+function renderCommanderSlot() {
+  const deck = state.activeDeck;
+  const commander = deck?.commander;
+  const partner = deck?.partner;
+
+  els.commanderSlot.classList.toggle("is-paar", Boolean(commander && partner));
+
+  if (!commander) {
+    els.commanderSlot.innerHTML = `
+      <span class="commander-empty">?</span>
+      <div>
+        <span class="field-label">Commander</span>
+        <strong>Noch keiner gewählt</strong>
+        <p class="small-note">Mit dem Stern bei einer Karte im Deck festlegen.</p>
+        <div class="button-row">
+          <button type="button" id="customCommanderBtn" class="retro-button">Eigener Commander</button>
+        </div>
+      </div>
+    `;
+  } else if (!partner) {
+    els.commanderSlot.innerHTML = commanderEintragHtml(commander, "commander");
+  } else {
+    els.commanderSlot.innerHTML = COMMANDER_PLAETZE.map(
+      (platz) => `<div class="commander-eintrag">${commanderEintragHtml(deck[platz], platz)}</div>`
+    ).join("");
   }
 
-  const removeBtn = els.commanderSlot.querySelector("#removeCommanderBtn");
-  if (removeBtn) {
-    removeBtn.addEventListener("click", removeCommanderCard);
+  for (const btn of els.commanderSlot.querySelectorAll("[data-commander-absetzen]")) {
+    btn.addEventListener("click", () => demoteCommander(btn.dataset.commanderAbsetzen));
   }
-
-  const versionBtn = els.commanderSlot.querySelector("#commanderVersionBtn");
-  if (versionBtn) {
-    versionBtn.addEventListener("click", () => openCommanderVersionPicker(commander));
+  for (const btn of els.commanderSlot.querySelectorAll("[data-commander-entfernen]")) {
+    btn.addEventListener("click", () => removeCommanderCard(btn.dataset.commanderEntfernen));
+  }
+  for (const btn of els.commanderSlot.querySelectorAll("[data-commander-version]")) {
+    btn.addEventListener("click", () => openCommanderVersionPicker(btn.dataset.commanderVersion));
   }
 
   const eigenerBtn = els.commanderSlot.querySelector("#customCommanderBtn");
@@ -1990,12 +2067,23 @@ function renderCommanderSlot() {
   }
 }
 
+// Leert einen der beiden Plätze. Geht der Commander, rückt der Partner
+// auf seinen Platz nach: Der erste Platz ist nie leer, solange es einen
+// zweiten gibt, und das Bild in der Übersicht bleibt gesetzt.
+function platzLeerenAenderung(platz) {
+  const deck = state.activeDeck;
+  if (platz === "partner" || !deck?.partner) {
+    return { [platz]: null };
+  }
+  return { commander: deck.partner, partner: null };
+}
+
 // Den Commander abzusetzen darf die Karte nicht aus dem Deck werfen.
 // Sie wandert zurück in die Kartenliste, denn beim Ernennen war sie von
 // dort gekommen.
-async function demoteCommander() {
+async function demoteCommander(platz = "commander") {
   if (!deckAenderbar()) return;
-  const commander = state.activeDeck?.commander;
+  const commander = state.activeDeck?.[platz];
   if (!commander) {
     return;
   }
@@ -2028,7 +2116,7 @@ async function demoteCommander() {
 
   try {
     await deckStore.putCard(state.activeDeck.id, entry, 1);
-    applyDeckResult(await deckStore.update(state.activeDeck.id, { commander: null }));
+    applyDeckResult(await deckStore.update(state.activeDeck.id, platzLeerenAenderung(platz)));
     await refreshDecks();
     setDeckStatus(t("{name} steht wieder als Karte im Deck.", { name: commander.name }), "ok");
   } catch (error) {
@@ -2038,15 +2126,15 @@ async function demoteCommander() {
 
 // Nimmt die Karte ganz aus dem Deck, im Gegensatz zum Stern, der sie
 // nur vom Commander-Platz zurück in die Liste schiebt.
-async function removeCommanderCard() {
+async function removeCommanderCard(platz = "commander") {
   if (!deckAenderbar()) return;
-  const commander = state.activeDeck?.commander;
+  const commander = state.activeDeck?.[platz];
   if (!commander) {
     return;
   }
 
   try {
-    applyDeckResult(await deckStore.update(state.activeDeck.id, { commander: null }));
+    applyDeckResult(await deckStore.update(state.activeDeck.id, platzLeerenAenderung(platz)));
     await refreshDecks();
     setDeckStatus(t("{name} aus dem Deck entfernt.", { name: commander.name }), "ok");
   } catch (error) {
@@ -2054,7 +2142,8 @@ async function removeCommanderCard() {
   }
 }
 
-async function openCommanderVersionPicker(commander) {
+async function openCommanderVersionPicker(platz = "commander") {
+  const commander = state.activeDeck?.[platz];
   if (!commander) {
     return;
   }
@@ -2074,6 +2163,9 @@ async function openCommanderVersionPicker(commander) {
     }
     state.searchPrints = prints;
     state.searchSelection = full;
+    // Das Versionsfenster ist für beide Plätze dasselbe; es muss sich
+    // merken, welchen es am Ende ändert.
+    state.versionSlot = platz;
     openVersionModal("commander");
     setDeckStatus(`${prints.length} Versionen von ${commander.name}.`, "ok");
   } catch (error) {
@@ -2084,16 +2176,17 @@ async function openCommanderVersionPicker(commander) {
 // Beim Commander wird kein Eintrag getauscht, sondern das Deck
 // aktualisiert. Das Artwork muss dabei mitwandern, sonst zeigt die
 // Übersicht weiter das Bild der alten Ausgabe.
-async function applyCommanderVersion(print) {
-  await setCommander({
-    id: print.id,
-    name: print.name,
-    image: getCardPreviewUrl(print),
-    art: getCardArtUrl(print)
-  });
+async function applyCommanderVersion(print, platz = "commander") {
+  await setCommander(
+    {
+      id: print.id,
+      name: print.name,
+      image: getCardPreviewUrl(print),
+      art: getCardArtUrl(print)
+    },
+    platz
+  );
 }
-
-
 
 function cardCategory(card) {
   return typKategorie(cardInfoCache.get(card.id)?.typeLine || "");
@@ -2122,11 +2215,10 @@ function groupCardsByType(cards) {
 function renderDeckCards() {
   const cards = state.activeDeckCards;
   const singleton = (state.activeDeck?.format || "commander") === "commander";
-  // Der Commander zählt als Karte des Decks mit.
-  const commander = state.activeDeck?.commander;
-  const total = cards.reduce((sum, card) => sum + card.quantity, 0) + (commander ? 1 : 0);
-  // Der Commander zählt auch beim Preis mit.
-  const preis = preisSumme([...cards, ...(commander ? [{ id: commander.id, quantity: 1 }] : [])]);
+  // Commander und Partner zählen als Karten des Decks mit, auch beim Preis.
+  const commanders = deckCommanders().map((karte) => ({ id: karte.id, quantity: 1 }));
+  const total = cards.reduce((sum, card) => sum + card.quantity, 0) + commanders.length;
+  const preis = preisSumme([...cards, ...commanders]);
   els.deckTotal.textContent = `${t(total === 1 ? "{count} Karte" : "{count} Karten", {
     count: total
   })} · ${preisText(preis)}`;
@@ -2292,12 +2384,28 @@ async function applyDeckVersion(print) {
   }
 }
 
+// Der Stern an einer Karte nimmt den ersten freien Platz: ohne
+// Commander den Commander-Platz, mit einem den des Partners. Sind beide
+// belegt, sagt er das, statt still einen zu verdrängen - früher ging der
+// verdrängte Commander dabei ganz aus dem Deck verloren.
+function freierCommanderPlatz() {
+  if (!state.activeDeck?.commander) return "commander";
+  if (!state.activeDeck?.partner) return "partner";
+  return null;
+}
+
 async function setCommanderFromDeckCard(card) {
+  const platz = freierCommanderPlatz();
+  if (!platz) {
+    setDeckStatus(t("Beide Commander-Plätze sind belegt. Setz zuerst einen mit dem Stern ab."), "err");
+    return;
+  }
+
   // Zu einer eigenen Karte gibt es keinen fertigen Ausschnitt. Er wird
   // aus dem Kartenbild geschnitten, an der Stelle, an der das Bildfenster
   // auf jeder Magic-Karte sitzt.
   if (istEigeneKarte(card.id)) {
-    await setCommander({ ...card, art: await eigenesArtwork(card.image) });
+    await setCommander({ ...card, art: await eigenesArtwork(card.image) }, platz);
     return;
   }
 
@@ -2305,9 +2413,9 @@ async function setCommanderFromDeckCard(card) {
   // gebraucht, die Deckzeile kennt nur das normale Bild.
   try {
     const full = await fetchJson(`https://api.scryfall.com/cards/${encodeURIComponent(card.id)}`);
-    await setCommander({ ...card, art: getCardArtUrl(full) });
+    await setCommander({ ...card, art: getCardArtUrl(full) }, platz);
   } catch {
-    await setCommander(card);
+    await setCommander(card, platz);
   }
 }
 
@@ -2384,30 +2492,40 @@ async function updateDeckQueries() {
     return;
   }
 
-  // Eine eigene Karte sagt ihre Farbidentität selbst, dafür braucht es
-  // Scryfall nicht. Einen Kreaturentyp hat sie dagegen nicht.
-  if (istEigeneKarte(commander.id)) {
-    state.commanderCard = null;
-    const { entries, label } = vorschlaegeZuIdentitaet(
-      eigeneKarteMerkmale(commander.id).colorIdentity
-    );
-    renderDeckQueries(entries, `Vorschläge passend zu ${commander.name} (${label}).`);
-    return;
-  }
+  // Bei einem Partner-Paar zählt die Vereinigung beider Farbidentitäten:
+  // Die Vorschläge richten sich nach dem Deck, nicht nach einer Hälfte.
+  // Eine eigene Karte sagt ihre Identität selbst, dafür braucht es
+  // Scryfall nicht; einen Kreaturentyp hat sie dagegen nicht.
+  const commanders = deckCommanders();
+  const namen = commanders.map((karte) => karte.name).join(" & ");
 
   try {
-    const card = await loadCommanderCard(commander.id);
-    state.commanderCard = card;
+    const farben = new Set();
+    let ersterVoll = null;
+    for (const karte of commanders) {
+      if (istEigeneKarte(karte.id)) {
+        eigeneKarteMerkmale(karte.id).colorIdentity.forEach((farbe) => farben.add(farbe));
+        continue;
+      }
+      const voll = await loadCommanderCard(karte.id);
+      if (karte.id === commander.id) {
+        ersterVoll = voll;
+      }
+      (voll.color_identity || []).forEach((farbe) => farben.add(farbe));
+    }
+    state.commanderCard = ersterVoll;
 
-    const { entries, label, identity } = vorschlaegeZuIdentitaet(card.color_identity || []);
+    const identitaet = ["W", "U", "B", "R", "G"].filter((farbe) => farben.has(farbe));
+    const { entries, label, identity } = vorschlaegeZuIdentitaet(identitaet);
 
-    // Kreaturentypen stehen hinter dem Gedankenstrich der Typzeile.
-    const subtypes = (card.type_line || "").split("—")[1]?.trim().split(/\s+/) || [];
+    // Kreaturentypen stehen hinter dem Gedankenstrich der Typzeile. Den
+    // Stammes-Vorschlag gibt der erste Commander vor.
+    const subtypes = (ersterVoll?.type_line || "").split("—")[1]?.trim().split(/\s+/) || [];
     if (subtypes.length) {
       entries.splice(1, 0, { query: `${identity} t:${subtypes[0].toLowerCase()}`, label: subtypes[0] });
     }
 
-    renderDeckQueries(entries, `Vorschläge passend zu ${commander.name} (${label}).`);
+    renderDeckQueries(entries, `Vorschläge passend zu ${namen} (${label}).`);
   } catch {
     renderDeckQueries(DEFAULT_DECK_QUERIES, "Klick auf eine Karte öffnet ihre Details.");
   }
@@ -2437,7 +2555,7 @@ const CARD_INFO_MAX = 4000;
 // Hochzählen, sobald ein Feld dazukommt. Sonst behalten alte Einträge ihre
 // frischen Preise, das neue Feld bleibt aber für immer leer, weil nur
 // unbekannte Karten und veraltete Preise nachgefragt werden.
-const CARD_INFO_VERSION = 3;
+const CARD_INFO_VERSION = 4;
 // Preise sind das Einzige, was sich täglich ändert. Sie bekommen deshalb
 // eine eigene, kurze Haltbarkeit und einen eigenen Zeitstempel.
 const PRICE_TTL = 24 * 60 * 60 * 1000;
@@ -2564,6 +2682,7 @@ function ladeCardInfo() {
       manaCost: eintrag.manaCost,
       cmc: eintrag.cmc ?? null,
       tokens: eintrag.tokens || [],
+      keywords: eintrag.keywords,
       price: preisFrisch ? eintrag.price : null,
       pt: preisFrisch ? eintrag.pt : 0,
       t: eintrag.t
@@ -2645,6 +2764,9 @@ async function ensureLegality(ids) {
         tokens: (card.all_parts || [])
           .filter((teil) => teil.component === "token")
           .map((teil) => ({ id: teil.id, name: teil.name })),
+        // Schlüsselwörter wie Partner oder Friends forever. Daran hängt,
+        // ob zwei Commander sich den Platz teilen dürfen.
+        keywords: card.keywords || [],
         price: preisAusScryfall(card),
         pt: Date.now(),
         t: Date.now()
@@ -2675,7 +2797,8 @@ function collectDeckProblems() {
   const probleme = [];
   const karten = state.activeDeckCards;
   const commander = state.activeDeck?.commander;
-  const gesamt = karten.reduce((summe, karte) => summe + karte.quantity, 0) + (commander ? 1 : 0);
+  const commanders = deckCommanders();
+  const gesamt = karten.reduce((summe, karte) => summe + karte.quantity, 0) + commanders.length;
   // Ein Problem kennt die Karten, die es ausgelöst haben. Damit lassen
   // sie sich im Deck rot umranden.
   const melde = (text, ...ids) => probleme.push({ text, ids });
@@ -2709,7 +2832,7 @@ function collectDeckProblems() {
     }
   }
 
-  for (const karte of [commander, ...karten].filter(Boolean)) {
+  for (const karte of [...commanders, ...karten]) {
     const status = legalityCache.get(karte.id);
     if (status === "banned") {
       melde(t("{name} ist im Commander verboten.", { name: karte.name }), karte.id);
@@ -2721,7 +2844,21 @@ function collectDeckProblems() {
   // Der Commander steckt den Farbrahmen ab: Jede Karte im Deck darf nur
   // Farben mitbringen, die auch er hat. Ohne Daten von Scryfall wird
   // nicht geraten.
-  const rahmen = commander && cardInfoCache.get(commander.id)?.colorIdentity;
+  // Zwei Commander dürfen sich den Platz nur teilen, wenn ihre Karten es
+  // erlauben. Kennt Scryfall die Schlüsselwörter eines der beiden nicht,
+  // etwa bei einer eigenen Karte, wird nicht geraten.
+  if (commanders.length === 2 && partnerPaarGueltig(commanders[0], commanders[1]) === false) {
+    melde(
+      t("{a} und {b} dürfen nicht gemeinsam Commander sein.", {
+        a: commanders[0].name,
+        b: commanders[1].name
+      }),
+      commanders[0].id,
+      commanders[1].id
+    );
+  }
+
+  const rahmen = commanderIdentitaet();
   if (rahmen) {
     for (const karte of karten) {
       const eigene = cardInfoCache.get(karte.id)?.colorIdentity;
@@ -2768,7 +2905,10 @@ async function checkDeckLegality() {
   // Erst das, was ohne Netz feststeht, damit die Anzeige sofort stimmt.
   renderLegality(collectDeckProblems());
 
-  const ids = [state.activeDeck.commander?.id, ...state.activeDeckCards.map((karte) => karte.id)];
+  const ids = [
+    ...deckCommanders().map((karte) => karte.id),
+    ...state.activeDeckCards.map((karte) => karte.id)
+  ];
   try {
     await ensureLegality(ids.filter(Boolean));
     renderLegality(collectDeckProblems());
@@ -3045,7 +3185,7 @@ async function eigeneKarteAnlegen() {
     // Der Commander steht nicht zusätzlich in der Kartenliste, deshalb
     // geht die Karte direkt auf den Platz. Der Stern holt sie später
     // wieder in die Liste zurück.
-    await setCommander({ ...karte, art: await eigenesArtwork(karte.image) });
+    await setCommander({ ...karte, art: await eigenesArtwork(karte.image) }, freierCommanderPlatz() || "commander");
   } else if (eigeneKarteEntwurf.ziel === "deck") {
     await addCardToDeck(karte);
   } else {
@@ -3071,9 +3211,8 @@ function istLand(karte) {
 
 function deckPips() {
   const summe = { W: 0, U: 0, B: 0, R: 0, G: 0 };
-  const commander = state.activeDeck?.commander;
   const alle = [
-    ...(commander ? [{ id: commander.id, quantity: 1 }] : []),
+    ...deckCommanders().map((karte) => ({ id: karte.id, quantity: 1 })),
     ...state.activeDeckCards
   ];
   for (const karte of alle) {
@@ -3090,8 +3229,7 @@ function deckPips() {
 // sonst die Farben, für die das Deck überhaupt Symbole hat. Dazu jede Farbe,
 // von der schon Standardländer im Deck liegen, damit man sie leeren kann.
 function landfarben() {
-  const commander = state.activeDeck?.commander;
-  const identitaet = commander && cardInfoCache.get(commander.id)?.colorIdentity;
+  const identitaet = commanderIdentitaet();
   const pips = deckPips();
   const basis = identitaet?.length
     ? identitaet
@@ -3279,7 +3417,8 @@ const playtest = {
   aufgedecktUid: null,
   // Freies Mana dieses Zugs, je Farbe. Ein neuer Zug setzt alles auf 0.
   mana: { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 },
-  commander: null,
+  // Die Commander-Zone hält einen Commander oder ein Partner-Paar.
+  commanders: [],
   turn: 1,
   laeuft: false
 };
@@ -3316,7 +3455,6 @@ function playtestStapel() {
 }
 
 function playtestNeu() {
-  const commander = state.activeDeck?.commander;
   playtest.library = mischen(playtestStapel());
   playtest.hand = playtest.library.splice(0, START_HAND);
   playtest.board = [];
@@ -3328,9 +3466,12 @@ function playtestNeu() {
   // Die Bilder der Spielsteine im Voraus holen, damit ein frisch
   // erzeugter Stein nicht erst leer auf dem Feld liegt.
   ensureTokenKarten(deckTokenRefs()).catch(() => {});
-  playtest.commander = commander
-    ? { uid: `cmd#${commander.id}`, id: commander.id, name: commander.name, image: commander.image }
-    : null;
+  playtest.commanders = deckCommanders().map((karte) => ({
+    uid: `cmd#${karte.id}`,
+    id: karte.id,
+    name: karte.name,
+    image: karte.image
+  }));
   playtest.turn = 1;
   playtest.laeuft = true;
   schliessePlaytestMenu();
@@ -3375,10 +3516,9 @@ function playtestEntnehmen(uid) {
       return liste.splice(index, 1)[0];
     }
   }
-  if (playtest.commander && playtest.commander.uid === uid) {
-    const stueck = playtest.commander;
-    playtest.commander = null;
-    return stueck;
+  const ausCommander = playtest.commanders.findIndex((stueck) => stueck.uid === uid);
+  if (ausCommander >= 0) {
+    return playtest.commanders.splice(ausCommander, 1)[0];
   }
   return null;
 }
@@ -3396,7 +3536,7 @@ function playtestEinfuegen(stueck, zone, optionen = {}) {
     return;
   }
   if (zone === "commander") {
-    playtest.commander = stueck;
+    playtest.commanders.push(stueck);
     return;
   }
   if (zone === "board") {
@@ -3484,11 +3624,16 @@ function renderPlaytest() {
     }
   `;
 
+  // Ein Paar liegt nebeneinander; die Zone wird dafür breiter, ein
+  // einzelner Commander sieht aus wie bisher.
+  els.playtestCommander.classList.toggle("is-paar", playtest.commanders.length > 1);
   els.playtestCommander.innerHTML = `
     <span class="playtest-zone-title">${escapeHtml(t("Commander"))}</span>
     ${
-      playtest.commander
-        ? playtestKartenBild(playtest.commander, "is-commander")
+      playtest.commanders.length
+        ? `<div class="playtest-commander-karten">${playtest.commanders
+            .map((stueck) => playtestKartenBild(stueck, "is-commander"))
+            .join("")}</div>`
         : `<div class="playtest-empty">${escapeHtml(t("keiner"))}</div>`
     }
   `;
@@ -4453,10 +4598,9 @@ new ResizeObserver(() => {
 
 
 function deckStatistik() {
-  const commander = state.activeDeck?.commander;
   const alle = [
     ...state.activeDeckCards,
-    ...(commander ? [{ id: commander.id, quantity: 1 }] : [])
+    ...deckCommanders().map((karte) => ({ id: karte.id, quantity: 1 }))
   ];
 
   const fuerKurve = alle.map((karte) => ({
@@ -4477,8 +4621,10 @@ function deckStatistik() {
 const tokenCache = new Map();
 
 function deckTokenRefs() {
-  const commander = state.activeDeck?.commander;
-  const ids = [...state.activeDeckCards.map((karte) => karte.id), ...(commander ? [commander.id] : [])];
+  const ids = [
+    ...state.activeDeckCards.map((karte) => karte.id),
+    ...deckCommanders().map((karte) => karte.id)
+  ];
   const gefunden = new Map();
   for (const id of ids) {
     for (const token of cardInfoCache.get(id)?.tokens || []) {
@@ -4657,7 +4803,7 @@ function applyDeckResult(result) {
   // es kein Netz. Der Eintrag entsteht deshalb sofort und nicht erst mit
   // der Regelprüfung, sonst stünden sie bis dahin unter "Sonstige".
   merkeEigeneKarten([
-    state.activeDeck?.commander?.id,
+    ...deckCommanders().map((karte) => karte.id),
     ...state.activeDeckCards.map((karte) => karte.id)
   ]);
   renderDeckEditor();
@@ -4754,16 +4900,23 @@ async function removeDeckCard(cardId) {
   }
 }
 
-async function setCommander(card) {
+async function setCommander(card, platz = "commander") {
   if (!deckAenderbar()) return;
   if (!state.activeDeck) return;
   try {
-    const commander = card
+    const eintrag = card
       ? { id: card.id, name: card.name, image: card.image ?? null, art: card.art ?? null }
       : null;
-    applyDeckResult(await deckStore.update(state.activeDeck.id, { commander }));
+    applyDeckResult(await deckStore.update(state.activeDeck.id, { [platz]: eintrag }));
     await refreshDecks();
-    setDeckStatus(card ? `${card.name} ist jetzt Commander.` : "Commander entfernt.", "ok");
+    setDeckStatus(
+      !card
+        ? "Commander entfernt."
+        : platz === "partner"
+          ? t("{name} ist jetzt Partner-Commander.", { name: card.name })
+          : `${card.name} ist jetzt Commander.`,
+      "ok"
+    );
   } catch (error) {
     setDeckStatus(error.message, "err");
   }
@@ -4824,8 +4977,9 @@ function exportDeckList() {
   }
 
   const lines = [];
-  if (state.activeDeck.commander) {
-    lines.push(`1 ${state.activeDeck.commander.name}`);
+  // Commander und Partner zuerst, damit ein Reimport sie wiederfindet.
+  for (const karte of deckCommanders()) {
+    lines.push(`1 ${karte.name}`);
   }
   for (const card of state.activeDeckCards) {
     lines.push(`${card.quantity} ${card.name}`);

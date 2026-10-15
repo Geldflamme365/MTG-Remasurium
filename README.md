@@ -192,6 +192,21 @@ width is remembered for next time. You can also move it with the arrow keys.
   and the artwork in the overview changes along with it.
 - A card made commander leaves the card list, the way the Commander rules put
   it apart from the rest of the deck. It still counts towards the deck size.
+- A deck can have **two commanders**, for partner pairs. The star takes the
+  first free slot: with no commander it sets the commander, with one it
+  adds the partner. With both slots taken it says so instead of pushing
+  one out. The commander slot then shows both side by side, each with its
+  own star and remove button; with a single commander it looks exactly as
+  before. Stepping the commander down moves the partner up into its place.
+- With a pair, the colour identity is the union of both, for the rules
+  check, the search suggestions and the basic lands alike. The rules check
+  also asks whether the two may share the command zone at all: both with
+  Partner, both with Partner with or Friends forever, Choose a Background
+  with a Background, or Doctor's companion with a Doctor. Scryfall
+  supplies those keywords along with the rest of a card; for a custom card
+  they are unknown and nothing is flagged.
+- The playtester puts both commanders side by side in the command zone,
+  and exporting writes both at the top of the list.
 
 Decks work without an account too. They then live in your browser and move up
 to your account the first time you log in.

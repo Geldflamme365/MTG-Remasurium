@@ -683,6 +683,20 @@ body.is-playtest .desk {
   width: 100%;
 }
 
+/* Ein Partner-Paar liegt in der Commander-Zone nebeneinander. Die Zone
+   wird dafür doppelt so breit, ein einzelner Commander bleibt wie er
+   war. */
+.playtest-zone.is-paar {
+  width: 254px;
+}
+
+.playtest-commander-karten {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+}
+
 /* Auf dem Spielfeld liegen die Karten frei, getappt um 90 Grad gedreht. */
 .playtest-card.is-board {
   position: absolute;
@@ -2065,6 +2079,20 @@ body.is-splitting {
   object-fit: cover;
   border: 2px solid;
   border-color: #8b867c #ffffff #ffffff #8b867c;
+}
+
+/* Ein Partner-Paar: zwei gleich gebaute Einträge nebeneinander, jeder
+   wie das Feld eines einzelnen Commanders. Auf schmalen Bildschirmen
+   untereinander. */
+.commander-slot.is-paar {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.commander-eintrag {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
 }
 
 .commander-star {

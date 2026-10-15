@@ -31,12 +31,13 @@ function publicDeck(deck) {
     name: deck.name,
     format: deck.format || "commander",
     commander: deck.commander || null,
+    partner: deck.partner || null,
     // Ohne Konto gibt es niemanden, der ein Deck veröffentlichen könnte:
     // Es liegt nur in diesem Browser. Das Feld steht trotzdem da, damit
     // die Oberfläche nicht zwei Formen auseinanderhalten muss.
     isPublic: false,
-    // Der Commander zählt als Karte des Decks mit.
-    cardCount: countCards(deck.cards) + (deck.commander ? 1 : 0),
+    // Commander und Partner zählen als Karten des Decks mit.
+    cardCount: countCards(deck.cards) + (deck.commander ? 1 : 0) + (deck.partner ? 1 : 0),
     // Nur Id und Menge: mehr braucht die Übersicht für den Preis nicht.
     cards: (deck.cards || []).map((card) => ({ id: card.id, quantity: card.quantity })),
     createdAt: deck.createdAt,
@@ -84,6 +85,7 @@ export function createDeckStore({ isLoggedIn }) {
         name: deck.name,
         format: deck.format || "commander",
         commander: deck.commander || null,
+        partner: deck.partner || null,
         cards: (deck.cards || []).map((card) => ({ ...card }))
       }));
     },
@@ -151,19 +153,23 @@ export function createDeckStore({ isLoggedIn }) {
         throw new Error("Ein Deck lässt sich nur mit Konto veröffentlichen.");
       }
 
-      if (changes.commander !== undefined) {
-        deck.commander = changes.commander
+      // Commander und Partner funktionieren gleich. Gleiche Regel wie im
+      // Backend: Wer auf einem der beiden Plätze sitzt, steht nicht
+      // zusätzlich in der Kartenliste.
+      for (const feld of ["commander", "partner"]) {
+        if (changes[feld] === undefined) {
+          continue;
+        }
+        deck[feld] = changes[feld]
           ? {
-              id: changes.commander.id,
-              name: changes.commander.name,
-              image: changes.commander.image ?? null,
-              art: changes.commander.art ?? null
+              id: changes[feld].id,
+              name: changes[feld].name,
+              image: changes[feld].image ?? null,
+              art: changes[feld].art ?? null
             }
           : null;
-        // Gleiche Regel wie im Backend: der Commander steht nicht
-        // zusätzlich in der Kartenliste.
-        if (deck.commander) {
-          deck.cards = (deck.cards || []).filter((card) => card.id !== deck.commander.id);
+        if (deck[feld]) {
+          deck.cards = (deck.cards || []).filter((card) => card.id !== deck[feld].id);
         }
       }
 

@@ -468,8 +468,8 @@ function limitQuantity(deck, card, requested) {
 }
 
 function deckFromRow(row, cardCount = 0) {
-  // Der Commander zählt als Karte des Decks mit.
-  const total = cardCount + (row.commander_card_id ? 1 : 0);
+  // Commander und Partner zählen als Karten des Decks mit.
+  const total = cardCount + (row.commander_card_id ? 1 : 0) + (row.partner_card_id ? 1 : 0);
   return {
     id: row.id,
     name: row.name,
@@ -480,6 +480,15 @@ function deckFromRow(row, cardCount = 0) {
           name: row.commander_name,
           image: row.commander_image,
           art: row.commander_art || null
+        }
+      : null,
+    // Der zweite Commander eines Partner-Paars, sonst null.
+    partner: row.partner_card_id
+      ? {
+          id: row.partner_card_id,
+          name: row.partner_name,
+          image: row.partner_image,
+          art: row.partner_art || null
         }
       : null,
     cardCount: total,
@@ -695,32 +704,39 @@ async function handleUpdateDeck(request, env, user, deckId) {
     values.push(name);
   }
 
-  // commander: null entfernt ihn, ein Objekt setzt ihn.
-  if (body.commander !== undefined) {
-    if (body.commander === null) {
-      updates.push(
-        "commander_card_id = NULL",
-        "commander_name = NULL",
-        "commander_image = NULL",
-        "commander_art = NULL"
-      );
-    } else {
-      const card = cardFromInput(body.commander);
-      if (!card) {
-        return fail("Commander-Daten unvollständig.");
-      }
-      updates.push(
-        "commander_card_id = ?",
-        "commander_name = ?",
-        "commander_image = ?",
-        "commander_art = ?"
-      );
-      values.push(card.id, card.name, card.image, bildFeld(body.commander.art));
-      // Der Commander gehört nicht zusätzlich in die Kartenliste.
-      await env.DB.prepare("DELETE FROM deck_cards WHERE deck_id = ? AND card_id = ?")
-        .bind(deckId, card.id)
-        .run();
+  // commander und partner: null leert den Platz, ein Objekt setzt ihn.
+  // Beide Plätze funktionieren gleich, nur die Spalten heissen anders.
+  for (const [feld, spalte, bezeichnung] of [
+    ["commander", "commander", "Commander"],
+    ["partner", "partner", "Partner"]
+  ]) {
+    if (body[feld] === undefined) {
+      continue;
     }
+    if (body[feld] === null) {
+      updates.push(
+        `${spalte}_card_id = NULL`,
+        `${spalte}_name = NULL`,
+        `${spalte}_image = NULL`,
+        `${spalte}_art = NULL`
+      );
+      continue;
+    }
+    const card = cardFromInput(body[feld]);
+    if (!card) {
+      return fail(`${bezeichnung}-Daten unvollständig.`);
+    }
+    updates.push(
+      `${spalte}_card_id = ?`,
+      `${spalte}_name = ?`,
+      `${spalte}_image = ?`,
+      `${spalte}_art = ?`
+    );
+    values.push(card.id, card.name, card.image, bildFeld(body[feld].art));
+    // Ein Commander gehört nicht zusätzlich in die Kartenliste.
+    await env.DB.prepare("DELETE FROM deck_cards WHERE deck_id = ? AND card_id = ?")
+      .bind(deckId, card.id)
+      .run();
   }
 
   // Sichtbarkeit: true nimmt das Deck in die Community-Übersicht auf,
@@ -927,11 +943,13 @@ async function handleMergeDecks(request, env, user) {
     const deckId = crypto.randomUUID();
     const stamp = new Date(now - index * 1000).toISOString();
     const commander = raw?.commander ? cardFromInput(raw.commander) : null;
+    const partner = raw?.partner ? cardFromInput(raw.partner) : null;
     const format = DECK_FORMATS.includes(raw?.format) ? raw.format : "commander";
 
     await env.DB.prepare(
-      `INSERT INTO decks (id, user_id, name, format, commander_card_id, commander_name, commander_image, commander_art, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO decks (id, user_id, name, format, commander_card_id, commander_name, commander_image, commander_art,
+                          partner_card_id, partner_name, partner_image, partner_art, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         deckId,
@@ -942,6 +960,10 @@ async function handleMergeDecks(request, env, user) {
         commander?.name || null,
         commander?.image || null,
         bildFeld(raw?.commander?.art),
+        partner?.id || null,
+        partner?.name || null,
+        partner?.image || null,
+        bildFeld(raw?.partner?.art),
         stamp,
         stamp
       )

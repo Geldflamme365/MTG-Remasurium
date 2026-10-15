@@ -829,6 +829,24 @@ body.is-playtest .desk {
   display: block;
 }
 
+/* Eine verdeckt umgedrehte Karte im Spiel zeigt dieselbe Rückseite, mit
+   demselben Ersatz, falls das Bild nicht kommt. */
+.playtest-card.is-verdeckt.ohne-bild {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, #4b3a8f, #221545);
+  border: 2px solid #8f7fd0;
+  border-radius: 6px;
+}
+
+.playtest-card.is-verdeckt.ohne-bild > img {
+  display: none;
+}
+
+.playtest-card.is-verdeckt.ohne-bild .playtest-back-ersatz {
+  display: block;
+}
+
 /* Kontextmenü der Bibliothek, im Stil der übrigen Fenster. */
 .pt-menu {
   position: fixed;

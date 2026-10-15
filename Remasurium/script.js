@@ -2555,7 +2555,7 @@ const CARD_INFO_MAX = 4000;
 // Hochzählen, sobald ein Feld dazukommt. Sonst behalten alte Einträge ihre
 // frischen Preise, das neue Feld bleibt aber für immer leer, weil nur
 // unbekannte Karten und veraltete Preise nachgefragt werden.
-const CARD_INFO_VERSION = 5;
+const CARD_INFO_VERSION = 6;
 // Preise sind das Einzige, was sich täglich ändert. Sie bekommen deshalb
 // eine eigene, kurze Haltbarkeit und einen eigenen Zeitstempel.
 const PRICE_TTL = 24 * 60 * 60 * 1000;
@@ -2684,6 +2684,7 @@ function ladeCardInfo() {
       tokens: eintrag.tokens || [],
       keywords: eintrag.keywords,
       loyalty: eintrag.loyalty ?? null,
+      backImage: eintrag.backImage || null,
       price: preisFrisch ? eintrag.price : null,
       pt: preisFrisch ? eintrag.pt : 0,
       t: eintrag.t
@@ -2776,6 +2777,12 @@ async function ensureLegality(ids) {
         // Die Start-Treue eines Planeswalkers. Scryfall liefert sie als
         // Text, weil es auch "X" gibt; damit lässt sich nicht starten.
         loyalty: startTreue(card.loyalty ?? card.card_faces?.[0]?.loyalty),
+        // Das Bild der Rückseite, nur bei Karten mit zwei bedruckten
+        // Seiten. Geteilte Karten oder Abenteuer haben zwar auch zwei
+        // Hälften, aber nur ein Bild; dort fehlt es, und umgedreht zeigt
+        // sich die gewöhnliche Rückseite.
+        backImage:
+          card.card_faces?.[1]?.image_uris?.normal || card.card_faces?.[1]?.image_uris?.large || null,
         price: preisAusScryfall(card),
         pt: Date.now(),
         t: Date.now()
@@ -3552,6 +3559,9 @@ function playtestEinfuegen(stueck, zone, optionen = {}) {
   if (zone !== "board") {
     delete stueck.counters;
     delete stueck.imSpiel;
+    // Umgedreht liegt eine Karte nur im Spiel; anderswo zeigt sie wieder
+    // ihre Vorderseite.
+    delete stueck.umgedreht;
   } else if (!stueck.imSpiel) {
     // Betritt ein Planeswalker das Spielfeld, kommt er mit seiner
     // Start-Treue. Wer nur auf dem Feld umgelegt wird, ist schon im Spiel
@@ -3621,6 +3631,26 @@ function playtestRueckseite(attribute = "") {
       <span class="playtest-back-ersatz">MTG</span>
     </div>
   `;
+}
+
+// Das Bild der Rückseite einer doppelseitigen Karte, sonst nichts.
+function rueckseiteVon(stueck) {
+  return cardInfoCache.get(stueck.id)?.backImage || null;
+}
+
+// Was eine Karte im Spiel zeigt: umgedreht ihre Rückseite, ist sie
+// doppelseitig, sonst die gewöhnliche Magic-Rückseite mit dem
+// gezeichneten Ersatz darunter.
+function brettBild(stueck) {
+  if (stueck.umgedreht) {
+    const rueckseite = rueckseiteVon(stueck);
+    return rueckseite
+      ? `<img src="${escapeHtml(rueckseite)}" alt="${escapeHtml(stueck.name)}" draggable="false" />`
+      : `<img src="${KARTEN_RUECKSEITE}" alt="" draggable="false" /><span class="playtest-back-ersatz">MTG</span>`;
+  }
+  return stueck.image
+    ? `<img src="${escapeHtml(stueck.image)}" alt="${escapeHtml(stueck.name)}" draggable="false" />`
+    : `<span class="playtest-card-name">${escapeHtml(stueck.name)}</span>`;
 }
 
 function renderPlaytest() {
@@ -3694,14 +3724,10 @@ function renderPlaytest() {
     const top = Math.round((stueck.yAnteil ?? 0) * nutzbarH);
     els.playtestBoard.insertAdjacentHTML(
       "beforeend",
-      `<div class="playtest-card is-board${stueck.tapped ? " is-tapped" : ""}${stueck.istToken ? " is-token" : ""}${playtestAuswahl.has(stueck.uid) ? " is-selected" : ""}" data-uid="${escapeHtml(
+      `<div class="playtest-card is-board${stueck.tapped ? " is-tapped" : ""}${stueck.istToken ? " is-token" : ""}${stueck.umgedreht && !rueckseiteVon(stueck) ? " is-verdeckt" : ""}${playtestAuswahl.has(stueck.uid) ? " is-selected" : ""}" data-uid="${escapeHtml(
         stueck.uid
       )}" style="left: ${left}px; top: ${top}px" title="${escapeHtml(stueck.name)}">
-        ${
-          stueck.image
-            ? `<img src="${escapeHtml(stueck.image)}" alt="${escapeHtml(stueck.name)}" draggable="false" />`
-            : `<span class="playtest-card-name">${escapeHtml(stueck.name)}</span>`
-        }
+        ${brettBild(stueck)}
         ${stueck.istKopie ? `<span class="pt-kopie">${escapeHtml(t("Kopie"))}</span>` : ""}
         ${markenHtml(stueck)}
       </div>`
@@ -3709,7 +3735,7 @@ function renderPlaytest() {
   }
 
   // Bricht das Rückseitenbild weg, tritt der gezeichnete Ersatz hervor.
-  for (const img of els.playtestView.querySelectorAll(".playtest-card.is-back img")) {
+  for (const img of els.playtestView.querySelectorAll(".playtest-card.is-back img, .playtest-card.is-verdeckt > img")) {
     img.addEventListener(
       "error",
       () => img.closest(".playtest-card")?.classList.add("ohne-bild"),
@@ -6010,6 +6036,36 @@ function playtestKopieren() {
   return true;
 }
 
+// --- Umdrehen -------------------------------------------------------------
+// F dreht die Karte im Spiel unter dem Zeiger um, bei einer Auswahl alle
+// ausgewählten. Eine doppelseitige Karte zeigt dann ihre andere Seite,
+// jede andere liegt verdeckt da. Ein zweites F dreht zurück.
+
+function playtestUmdrehen() {
+  const uids = tastenGruppe() || (ueberfahreneKarte ? [ueberfahreneKarte] : []);
+  const stuecke = uids.map(findeStueck).filter((stueck) => stueck && playtest.board.includes(stueck));
+  if (!stuecke.length) {
+    return false;
+  }
+  // Bei einer gemischten Auswahl dreht F erst alle auf dieselbe Seite.
+  const umdrehen = !stuecke.every((stueck) => stueck.umgedreht);
+  for (const stueck of stuecke) {
+    if (umdrehen) stueck.umgedreht = true;
+    else delete stueck.umgedreht;
+  }
+  renderPlaytest();
+  setPlaytestHinweis(
+    stuecke.length === 1
+      ? umdrehen
+        ? t("{name} umgedreht.", { name: stuecke[0].name })
+        : t("{name} wieder aufgedeckt.", { name: stuecke[0].name })
+      : umdrehen
+        ? t("{count} Karten umgedreht.", { count: stuecke.length })
+        : t("{count} Karten wieder aufgedeckt.", { count: stuecke.length })
+  );
+  return true;
+}
+
 // --- Marken ---------------------------------------------------------------
 // Rechtsklick auf eine Karte im Spiel legt Marken auf sie. Liegen schon
 // welche da, stehen sie darunter je in einer Zeile zum Ändern. Angezeigt
@@ -6236,6 +6292,11 @@ window.addEventListener("keydown", (event) => {
   }
   // C kopiert, aber nur ohne Strg: Strg+C bleibt das Kopieren des Browsers.
   if (taste === "c" && !event.ctrlKey && !event.metaKey && !event.shiftKey && playtestKopieren()) {
+    event.preventDefault();
+    return;
+  }
+  // F dreht um, ebenfalls ohne Strg: Strg+F öffnet die Bibliothekssuche.
+  if (taste === "f" && !event.ctrlKey && !event.metaKey && !event.shiftKey && playtestUmdrehen()) {
     event.preventDefault();
     return;
   }

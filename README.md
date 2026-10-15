@@ -311,6 +311,14 @@ Point at a card and a single key sends it somewhere, no dragging needed:
 | `L` | Top of the library |
 | `H` | Hand |
 | `C` | A copy on the battlefield (see below) |
+| `F` | Stays put and flips over (battlefield only) |
+
+`F` turns a card on the battlefield over. A double-faced card shows its
+other face, taken from Scryfall; any other card lies face down and shows
+the card back. Press `F` again to turn it back. With a selection, `F`
+flips every selected card, first all to the same side. A card that
+leaves the battlefield is face up again. `Ctrl+F` still opens the
+library search.
 
 `C` copies the card instead of moving it. By the rules such a copy is a
 token, so it appears on the battlefield, next to the original if that is

@@ -2555,7 +2555,7 @@ const CARD_INFO_MAX = 4000;
 // Hochzählen, sobald ein Feld dazukommt. Sonst behalten alte Einträge ihre
 // frischen Preise, das neue Feld bleibt aber für immer leer, weil nur
 // unbekannte Karten und veraltete Preise nachgefragt werden.
-const CARD_INFO_VERSION = 4;
+const CARD_INFO_VERSION = 5;
 // Preise sind das Einzige, was sich täglich ändert. Sie bekommen deshalb
 // eine eigene, kurze Haltbarkeit und einen eigenen Zeitstempel.
 const PRICE_TTL = 24 * 60 * 60 * 1000;
@@ -2683,6 +2683,7 @@ function ladeCardInfo() {
       cmc: eintrag.cmc ?? null,
       tokens: eintrag.tokens || [],
       keywords: eintrag.keywords,
+      loyalty: eintrag.loyalty ?? null,
       price: preisFrisch ? eintrag.price : null,
       pt: preisFrisch ? eintrag.pt : 0,
       t: eintrag.t
@@ -2721,6 +2722,11 @@ function speichereCardInfo() {
 }
 
 ladeCardInfo();
+
+function startTreue(wert) {
+  const zahl = Number.parseInt(wert, 10);
+  return Number.isFinite(zahl) && zahl > 0 ? zahl : null;
+}
 
 async function ensureLegality(ids) {
   await ensureKurs();
@@ -2767,6 +2773,9 @@ async function ensureLegality(ids) {
         // Schlüsselwörter wie Partner oder Friends forever. Daran hängt,
         // ob zwei Commander sich den Platz teilen dürfen.
         keywords: card.keywords || [],
+        // Die Start-Treue eines Planeswalkers. Scryfall liefert sie als
+        // Text, weil es auch "X" gibt; damit lässt sich nicht starten.
+        loyalty: startTreue(card.loyalty ?? card.card_faces?.[0]?.loyalty),
         price: preisAusScryfall(card),
         pt: Date.now(),
         t: Date.now()
@@ -3466,6 +3475,9 @@ function playtestNeu() {
   // Die Bilder der Spielsteine im Voraus holen, damit ein frisch
   // erzeugter Stein nicht erst leer auf dem Feld liegt.
   ensureTokenKarten(deckTokenRefs()).catch(() => {});
+  // Ebenso die Kartenangaben, die Start-Treue der Planeswalker steht
+  // darin. Was schon bekannt ist, wird nicht noch einmal gefragt.
+  ensureLegality([...deckCommanders(), ...state.activeDeckCards].map((karte) => karte.id).filter(Boolean)).catch(() => {});
   playtest.commanders = deckCommanders().map((karte) => ({
     uid: `cmd#${karte.id}`,
     id: karte.id,
@@ -3539,6 +3551,16 @@ function playtestEinfuegen(stueck, zone, optionen = {}) {
   // wie es die Regeln vorsehen; zurück aufs Feld kommt er ohne.
   if (zone !== "board") {
     delete stueck.counters;
+    delete stueck.imSpiel;
+  } else if (!stueck.imSpiel) {
+    // Betritt ein Planeswalker das Spielfeld, kommt er mit seiner
+    // Start-Treue. Wer nur auf dem Feld umgelegt wird, ist schon im Spiel
+    // und behält, was er hat.
+    stueck.imSpiel = true;
+    const treue = cardInfoCache.get(stueck.id)?.loyalty;
+    if (treue) {
+      stueck.counters = { ...stueck.counters, loyalty: treue };
+    }
   }
   if (zone === "commander") {
     playtest.commanders.push(stueck);
@@ -3799,6 +3821,20 @@ function menuHtml(eintraege, pfad = "") {
       if (eintrag.trenner) {
         return `<div class="pt-menu-trenner"></div>`;
       }
+      if (eintrag.zaehler) {
+        const { marke, wert } = eintrag.zaehler;
+        return `
+          <div class="pt-menu-zaehler" data-zaehler="${id}">
+            <span class="pt-zaehler-name">${escapeHtml(marke.label)}</span>
+            <button type="button" data-tun="minus" aria-label="${escapeHtml(t("Eine weniger"))}">-</button>
+            <span class="pt-zaehler-wert">${escapeHtml(String(wert))}</span>
+            <button type="button" data-tun="plus" aria-label="${escapeHtml(t("Eine mehr"))}">+</button>
+            <button type="button" data-tun="weg" class="pt-zaehler-weg" title="${escapeHtml(t("Alle entfernen"))}" aria-label="${escapeHtml(t("Alle entfernen"))}">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6 1h4l1 1h3v2H2V2h3zM3 5h10l-1 10H4z"/></svg>
+            </button>
+          </div>
+        `;
+      }
       if (eintrag.unter) {
         return `
           <div class="pt-menu-item has-sub" data-sub="${id}">
@@ -3828,6 +3864,16 @@ function zeigePlaytestMenu(x, y, eintraege) {
   const oben = Math.min(y, window.innerHeight - masse.height - 8);
   els.playtestMenu.style.left = `${Math.max(8, links)}px`;
   els.playtestMenu.style.top = `${Math.max(8, oben)}px`;
+}
+
+// Zeichnet ein offenes Menü an Ort und Stelle neu, etwa wenn sich eine
+// Zahl darin geändert hat.
+function zeichnePlaytestMenuNeu(eintraege) {
+  if (els.playtestMenu.hidden) {
+    return;
+  }
+  menuEintraege = eintraege;
+  els.playtestMenu.innerHTML = menuHtml(eintraege);
 }
 
 // --- Die Befehle der Bibliothek ------------------------------------------
@@ -5786,6 +5832,16 @@ els.playtestView.addEventListener("contextmenu", (event) => {
 // Im Menü: ein Eintrag mit Untermenü klappt es auf, ein Eintrag mit
 // Befehl führt ihn aus und schliesst das Menü.
 els.playtestMenu.addEventListener("click", (event) => {
+  // Eine Zeile mit Zähler bleibt offen: Plus, Minus und Wegwerfen ändern
+  // nur die Zahl, ein Klick daneben tut nichts.
+  const zeile = event.target.closest("[data-zaehler]");
+  if (zeile) {
+    const knopf = event.target.closest("[data-tun]");
+    if (knopf) {
+      menuEintragZuPfad(zeile.dataset.zaehler)?.zaehler?.[knopf.dataset.tun]?.();
+    }
+    return;
+  }
   const befehl = event.target.closest("[data-aktion]");
   if (befehl) {
     menuEintragZuPfad(befehl.dataset.aktion)?.aktion?.();
@@ -5955,11 +6011,13 @@ function playtestKopieren() {
 }
 
 // --- Marken ---------------------------------------------------------------
-// Rechtsklick auf eine Karte im Spiel legt Marken auf sie oder nimmt sie
-// weg. Angezeigt werden sie als kleine Plaketten am rechten Rand der
-// Karte. Die Namen bleiben englisch, wie sie auf den Karten stehen.
+// Rechtsklick auf eine Karte im Spiel legt Marken auf sie. Liegen schon
+// welche da, stehen sie darunter je in einer Zeile zum Ändern. Angezeigt
+// werden sie als kleine Plaketten am rechten Rand der Karte. Die Namen
+// bleiben englisch, wie sie auf den Karten stehen.
 
 const PT_MARKEN = [
+  { key: "loyalty", label: "Loyalty" },
   { key: "plus1", label: "+1/+1" },
   { key: "lifelink", label: "Lifelink" },
   { key: "hexproof", label: "Hexproof" },
@@ -5974,6 +6032,10 @@ const PT_MARKEN = [
 const PT_MARKEN_FAEHIGKEIT = new Set(["lifelink", "hexproof", "indestructible"]);
 
 function markenText(marke, anzahl) {
+  if (marke.key === "loyalty") {
+    // Steht im Schild, wie auf der Karte selbst.
+    return String(anzahl);
+  }
   if (marke.key === "plus1") {
     // So liest man es am Tisch: zwei +1/+1-Marken sind +2/+2.
     return `+${anzahl}/+${anzahl}`;
@@ -5992,13 +6054,14 @@ function markenHtml(stueck) {
   return `<span class="pt-marken">${vorhanden
     .map(
       (marke) =>
-        `<span class="pt-marke${marke.key === "plus1" ? " is-plus" : ""}">${escapeHtml(
+        `<span class="pt-marke is-${marke.key}" title="${escapeHtml(marke.label)}">${escapeHtml(
           markenText(marke, stueck.counters[marke.key])
         )}</span>`
     )
     .join("")}</span>`;
 }
 
+// Ein Schritt von -Infinity nimmt alle Marken dieser Art weg.
 function markenAendern(stuecke, marke, schritt) {
   for (const stueck of stuecke) {
     const marken = stueck.counters || {};
@@ -6017,15 +6080,19 @@ function markenAendern(stuecke, marke, schritt) {
   renderPlaytest();
   const ziel =
     stuecke.length === 1 ? { name: stuecke[0].name } : { count: stuecke.length };
-  setPlaytestHinweis(
-    schritt > 0
-      ? stuecke.length === 1
+  if (schritt > 0) {
+    setPlaytestHinweis(
+      stuecke.length === 1
         ? t("{label} auf {name}.", { label: marke.label, ...ziel })
         : t("{label} auf {count} Karten.", { label: marke.label, ...ziel })
-      : stuecke.length === 1
+    );
+  } else {
+    setPlaytestHinweis(
+      stuecke.length === 1
         ? t("{label} von {name} entfernt.", { label: marke.label, ...ziel })
         : t("{label} von {count} Karten entfernt.", { label: marke.label, ...ziel })
-  );
+    );
+  }
 }
 
 // Das Menü einer Karte im Spiel. Gehört sie zu einer Auswahl, gilt es
@@ -6034,20 +6101,31 @@ function kartenMenuEintraege(uid) {
   const uids = playtestAuswahl.has(uid) && playtestAuswahl.size > 1 ? [...playtestAuswahl] : [uid];
   const stuecke = uids.map(findeStueck).filter((stueck) => stueck && playtest.board.includes(stueck));
   const vorhanden = PT_MARKEN.filter((marke) => stuecke.some((stueck) => stueck.counters?.[marke.key]));
+  // Plus, Minus und Wegwerfen lassen das Menü offen, damit man mehrmals
+  // drücken kann; es wird nur neu gezeichnet.
+  const aendern = (marke, schritt) => () => {
+    markenAendern(stuecke, marke, schritt);
+    zeichnePlaytestMenuNeu(kartenMenuEintraege(uid));
+  };
   return [
     {
       label: "Marke hinzufügen",
       unter: PT_MARKEN.map((marke) => ({ label: marke.label, aktion: () => markenAendern(stuecke, marke, 1) }))
     },
-    // Wegnehmen lässt sich nur, was auch daliegt.
-    ...(vorhanden.length
-      ? [
-          {
-            label: "Marke entfernen",
-            unter: vorhanden.map((marke) => ({ label: marke.label, aktion: () => markenAendern(stuecke, marke, -1) }))
-          }
-        ]
-      : [])
+    ...(vorhanden.length ? [{ trenner: true }] : []),
+    ...vorhanden.map((marke) => {
+      const werte = new Set(stuecke.map((stueck) => stueck.counters?.[marke.key] || 0));
+      return {
+        zaehler: {
+          marke,
+          // Tragen mehrere Karten verschieden viele, steht keine Zahl da.
+          wert: werte.size === 1 ? [...werte][0] : "–",
+          plus: aendern(marke, 1),
+          minus: aendern(marke, -1),
+          weg: aendern(marke, -Infinity)
+        }
+      };
+    })
   ];
 }
 

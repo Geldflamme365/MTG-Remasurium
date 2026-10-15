@@ -1016,9 +1016,59 @@ body.is-playtest .desk {
   white-space: nowrap;
 }
 
-.pt-marke.is-plus {
+.pt-marke.is-plus1 {
   color: #b9f5c4;
   border-color: rgba(120, 220, 140, 0.5);
+}
+
+/* Treue steht wie auf der Karte in einem kleinen Schild. */
+.pt-marke.is-loyalty {
+  min-width: 20px;
+  padding: 1px 4px 4px;
+  color: #11131c;
+  background: #e9edf7;
+  border: 0;
+  text-align: center;
+  clip-path: polygon(0 0, 100% 0, 100% 68%, 50% 100%, 0 68%);
+}
+
+/* Eine Marke im Kartenmenü: Name, Minus, Zahl, Plus, Wegwerfen. */
+.pt-menu-zaehler {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 12px;
+  color: var(--ink);
+}
+
+.pt-zaehler-name {
+  flex: 1;
+}
+
+.pt-zaehler-wert {
+  min-width: 2ch;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 700;
+  text-align: center;
+}
+
+.pt-menu-zaehler button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pt-menu-zaehler button:hover {
+  color: #fff;
+  background: linear-gradient(180deg, #2f51d7, #10256f);
 }
 
 /* Zieht man eine Gruppe, sagt der Schatten, wie viele mitgehen. */

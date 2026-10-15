@@ -343,7 +343,8 @@ the battlefield keeps them. A copy starts without counters, apart from
 the loyalty a planeswalker enters with.
 
 Over the library's pile those keys act on its top card. With nothing
-under the pointer they do nothing, so `D` keeps drawing as usual.
+under the pointer they do nothing, so `D` keeps drawing as usual. `S`
+with the pointer over the library shuffles it.
 
 The library shows a real card back, fetched from Scryfall like every
 other card image here. If that image cannot be loaded, a drawn stand-in
@@ -375,6 +376,12 @@ Turning the top card over leaves it where it is; it simply lies face up
 on the pile, and a click still draws it. It remembers which card was
 turned, not merely that something was, so drawing the revealed card does
 not leave the next one lying open.
+
+Searching the library shows a "Shuffle library after close" checkbox
+under the search field. It is ticked every time the search opens, since
+you almost always shuffle after searching; however the search closes
+(X, Escape, a click beside it or taking a card), the library is then
+shuffled. Untick it to leave the order as it is, just this once.
 
 The grids you can take a card from — the library, the graveyard, the
 exile zone — carry a search field that filters by name as you type.

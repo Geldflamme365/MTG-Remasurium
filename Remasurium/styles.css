@@ -2337,6 +2337,16 @@ body.is-splitting {
   opacity: 0.6;
 }
 
+/* Das Häkchen unter der Suche in der Bibliothek, klein und unaufdringlich. */
+.pt-mischen-option {
+  margin: 6px 0 10px;
+  font-size: 0.85rem;
+}
+
+.pt-mischen-option[hidden] {
+  display: none;
+}
+
 /* Aufklappmenü in der Navigationsleiste. Die Auswahl zwischen eigenen
    und öffentlichen Decks gehört an den Menüpunkt selbst, nicht in die
    Seite dahinter: Man wählt, bevor man irgendwo landet. */

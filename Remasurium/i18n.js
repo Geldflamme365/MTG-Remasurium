@@ -206,6 +206,8 @@ const EN = {
   "Kein Treffer.": "No match.",
   "Spielstein erzeugen": "Create token",
   "Kopie": "Copy",
+  "Bibliothek beim Schliessen mischen": "Shuffle library after close",
+  "{name} ins Spiel, Bibliothek gemischt.": "{name} onto the battlefield, library shuffled.",
   "Marke hinzufügen": "Add counter",
   "{name} umgedreht.": "{name} flipped.",
   "{name} wieder aufgedeckt.": "{name} turned face up again.",

@@ -165,6 +165,8 @@ const els = {
   playtestCardsGrid: document.getElementById("playtestCardsGrid"),
   playtestCardsSearchRow: document.getElementById("playtestCardsSearchRow"),
   playtestCardsSearch: document.getElementById("playtestCardsSearch"),
+  playtestShuffleRow: document.getElementById("playtestShuffleRow"),
+  playtestShuffleAfter: document.getElementById("playtestShuffleAfter"),
   playtestCardsEmpty: document.getElementById("playtestCardsEmpty"),
   playtestCardsCloseBtn: document.getElementById("playtestCardsCloseBtn"),
   playtestMenu: document.getElementById("playtestMenu"),
@@ -3806,11 +3808,30 @@ function openPlaytestKarten(titel, stuecke, { hinweis = "", waehlbar = false, zo
   // von ein paar Karten wäre ein Suchfeld nur im Weg.
   els.playtestCardsSearchRow.hidden = !waehlbar;
   els.playtestCardsSearch.value = "";
+  // Wer die Bibliothek durchsucht, mischt sie danach fast immer. Darum
+  // steht das Häkchen bei jedem Öffnen wieder, abwählen gilt nur einmal.
+  els.playtestShuffleRow.hidden = zone !== "library";
+  els.playtestShuffleAfter.checked = true;
   els.playtestCardsEmpty.hidden = true;
   zeichneKartenRaster(stuecke, waehlbar);
   openModal(els.playtestCardsModal);
   // Das Suchfeld bekommt bewusst keinen Fokus: Sonst landeten E, G, L
   // und H als Text darin, statt die Karte unter dem Zeiger zu bewegen.
+}
+
+// Schliesst das Kartenfenster. War es die Suche in der Bibliothek und
+// steht das Häkchen, wird die Bibliothek danach gemischt - auf jedem
+// Weg hinaus, ob über X, Escape, daneben klicken oder eine gewählte Karte.
+function schliessePlaytestKarten() {
+  if (!els.playtestCardsModal.classList.contains("open")) {
+    return false;
+  }
+  closeModal(els.playtestCardsModal);
+  if (kartenRaster?.zone === "library" && els.playtestShuffleAfter.checked) {
+    bibliothekMischen();
+    return true;
+  }
+  return false;
 }
 
 // Zeichnet ein wählbares Raster mit dem aktuellen Inhalt seiner Zone neu
@@ -5918,8 +5939,11 @@ els.playtestExile
 // Welche Karte liegt gerade unter dem Zeiger? Die Tastenkürzel schicken
 // sie in eine Zone, ohne dass man sie dafür ziehen muss.
 let ueberfahreneKarte = null;
+// Und liegt er über der Bibliothek? Dort mischt S, auch wenn sie leer ist.
+let ueberBibliothek = false;
 
 els.playtestView.addEventListener("pointerover", (event) => {
+  ueberBibliothek = els.playtestLibrary.contains(event.target);
   const karte = event.target.closest(".playtest-card");
   // Der Stapel der Bibliothek trägt keine eigene Kennung; gemeint ist
   // dort die oberste Karte.
@@ -5930,6 +5954,7 @@ els.playtestView.addEventListener("pointerover", (event) => {
 
 els.playtestView.addEventListener("pointerleave", () => {
   ueberfahreneKarte = null;
+  ueberBibliothek = false;
 });
 
 // Taste -> Zone. Entspricht den Anfangsbuchstaben: Exil, Graveyard,
@@ -6234,10 +6259,10 @@ els.playtestManaList.addEventListener("click", (event) => {
 
 els.playtestCardsSearch.addEventListener("input", filterePlaytestKarten);
 
-els.playtestCardsCloseBtn.addEventListener("click", () => closeModal(els.playtestCardsModal));
+els.playtestCardsCloseBtn.addEventListener("click", schliessePlaytestKarten);
 els.playtestCardsModal.addEventListener("click", (event) => {
   if (event.target === els.playtestCardsModal) {
-    closeModal(els.playtestCardsModal);
+    schliessePlaytestKarten();
   }
 });
 
@@ -6249,10 +6274,14 @@ els.playtestCardsGrid.addEventListener("click", (event) => {
     return;
   }
   const stueck = playtestVerschiebe(karte.dataset.uid, "board");
-  closeModal(els.playtestCardsModal);
+  const gemischt = schliessePlaytestKarten();
   renderPlaytest();
   if (stueck) {
-    setPlaytestHinweis(t("{name} nach {zone}.", { name: stueck.name, zone: t("Spielfeld") }));
+    setPlaytestHinweis(
+      gemischt
+        ? t("{name} ins Spiel, Bibliothek gemischt.", { name: stueck.name })
+        : t("{name} nach {zone}.", { name: stueck.name, zone: t("Spielfeld") })
+    );
   }
 });
 
@@ -6295,6 +6324,12 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     return;
   }
+  // S über der Bibliothek mischt sie.
+  if (taste === "s" && ueberBibliothek && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+    event.preventDefault();
+    bibliothekMischen();
+    return;
+  }
   // F dreht um, ebenfalls ohne Strg: Strg+F öffnet die Bibliothekssuche.
   if (taste === "f" && !event.ctrlKey && !event.metaKey && !event.shiftKey && playtestUmdrehen()) {
     event.preventDefault();
@@ -6321,7 +6356,7 @@ window.addEventListener("keydown", (event) => {
     if (!els.playtestMenu.hidden) {
       schliessePlaytestMenu();
     } else if (els.playtestCardsModal.classList.contains("open")) {
-      closeModal(els.playtestCardsModal);
+      schliessePlaytestKarten();
     } else if (auswahlLeeren()) {
       setPlaytestHinweis(t("Auswahl aufgehoben."));
     } else {

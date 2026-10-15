@@ -981,6 +981,46 @@ body.is-playtest .desk {
   pointer-events: none;
 }
 
+/* Marken stapeln sich leise am rechten Rand der Karte. */
+.pt-marken {
+  position: absolute;
+  top: 18%;
+  right: -4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  pointer-events: none;
+}
+
+/* Eine getappte Karte ist um 90° gedreht, ihr rechter Rand liegt dann
+   unten. Die Marken hängen sich darum an ihre Oberkante, die nun rechts
+   liegt, und drehen sich zurück, damit sie aufrecht lesbar bleiben. */
+.playtest-card.is-tapped .pt-marken {
+  top: -4px;
+  right: 82%;
+  transform: rotate(-90deg);
+  transform-origin: top right;
+}
+
+.pt-marke {
+  padding: 1px 5px;
+  color: #e9edf7;
+  background: rgba(10, 12, 20, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 3px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.pt-marke.is-plus {
+  color: #b9f5c4;
+  border-color: rgba(120, 220, 140, 0.5);
+}
+
 /* Zieht man eine Gruppe, sagt der Schatten, wie viele mitgehen. */
 .pt-anzahl {
   position: absolute;

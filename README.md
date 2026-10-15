@@ -320,6 +320,14 @@ and so does a copy of that copy, since it still goes back to a real card;
 a copy of a token is just another token and needs none. `Ctrl+C` is left
 alone for the browser.
 
+Right-click a card on the battlefield to add counters: +1/+1, Lifelink,
+Hexproof, Indestructible, Time, Charge or Generic. They show as small
+plates along the card's right edge; two +1/+1 counters read "+2/+2". Once
+a card carries counters, the same menu can take them off one at a time.
+With several cards selected, the menu acts on all of them. A card that
+leaves the battlefield loses its counters, as the rules say, and a copy
+starts without any.
+
 Over the library's pile those keys act on its top card. With nothing
 under the pointer they do nothing, so `D` keeps drawing as usual.
 

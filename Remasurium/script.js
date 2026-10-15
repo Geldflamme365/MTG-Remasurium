@@ -3535,6 +3535,11 @@ function playtestEinfuegen(stueck, zone, optionen = {}) {
   if (stueck.istToken && zone !== "board") {
     return;
   }
+  // Marken gibt es nur auf dem Spielfeld. Wer es verlässt, verliert sie,
+  // wie es die Regeln vorsehen; zurück aufs Feld kommt er ohne.
+  if (zone !== "board") {
+    delete stueck.counters;
+  }
   if (zone === "commander") {
     playtest.commanders.push(stueck);
     return;
@@ -3676,6 +3681,7 @@ function renderPlaytest() {
             : `<span class="playtest-card-name">${escapeHtml(stueck.name)}</span>`
         }
         ${stueck.istKopie ? `<span class="pt-kopie">${escapeHtml(t("Kopie"))}</span>` : ""}
+        ${markenHtml(stueck)}
       </div>`
     );
   }
@@ -5763,6 +5769,14 @@ els.playtestView.addEventListener("contextmenu", (event) => {
     zeigePlaytestMenu(event.clientX, event.clientY, bibliothekMenuEintraege());
     return;
   }
+  // Eine Karte im Spiel hat ihr eigenes Menü, die freie Fläche das des
+  // Spielfelds.
+  const karte = event.target.closest(".playtest-card.is-board");
+  if (karte) {
+    event.preventDefault();
+    zeigePlaytestMenu(event.clientX, event.clientY, kartenMenuEintraege(karte.dataset.uid));
+    return;
+  }
   if (els.playtestBoard.contains(event.target) && !event.target.closest(".pt-mana")) {
     event.preventDefault();
     zeigePlaytestMenu(event.clientX, event.clientY, spielfeldMenuEintraege());
@@ -5938,6 +5952,103 @@ function playtestKopieren() {
       : t("{count} Kopien erzeugt.", { count: originale.length })
   );
   return true;
+}
+
+// --- Marken ---------------------------------------------------------------
+// Rechtsklick auf eine Karte im Spiel legt Marken auf sie oder nimmt sie
+// weg. Angezeigt werden sie als kleine Plaketten am rechten Rand der
+// Karte. Die Namen bleiben englisch, wie sie auf den Karten stehen.
+
+const PT_MARKEN = [
+  { key: "plus1", label: "+1/+1" },
+  { key: "lifelink", label: "Lifelink" },
+  { key: "hexproof", label: "Hexproof" },
+  { key: "indestructible", label: "Indestructible" },
+  { key: "time", label: "Time" },
+  { key: "charge", label: "Charge" },
+  { key: "generic", label: "Generic" }
+];
+
+// Fähigkeiten-Marken wirken schon einzeln, die Zahl zählt dort erst ab
+// zwei. Zeit-, Ladungs- und allgemeine Marken sind dagegen nur Zahl.
+const PT_MARKEN_FAEHIGKEIT = new Set(["lifelink", "hexproof", "indestructible"]);
+
+function markenText(marke, anzahl) {
+  if (marke.key === "plus1") {
+    // So liest man es am Tisch: zwei +1/+1-Marken sind +2/+2.
+    return `+${anzahl}/+${anzahl}`;
+  }
+  if (PT_MARKEN_FAEHIGKEIT.has(marke.key)) {
+    return anzahl > 1 ? `${marke.label} ×${anzahl}` : marke.label;
+  }
+  return `${marke.label} ${anzahl}`;
+}
+
+function markenHtml(stueck) {
+  const vorhanden = PT_MARKEN.filter((marke) => stueck.counters?.[marke.key]);
+  if (!vorhanden.length) {
+    return "";
+  }
+  return `<span class="pt-marken">${vorhanden
+    .map(
+      (marke) =>
+        `<span class="pt-marke${marke.key === "plus1" ? " is-plus" : ""}">${escapeHtml(
+          markenText(marke, stueck.counters[marke.key])
+        )}</span>`
+    )
+    .join("")}</span>`;
+}
+
+function markenAendern(stuecke, marke, schritt) {
+  for (const stueck of stuecke) {
+    const marken = stueck.counters || {};
+    const neu = Math.max(0, (marken[marke.key] || 0) + schritt);
+    if (neu) {
+      marken[marke.key] = neu;
+    } else {
+      delete marken[marke.key];
+    }
+    if (Object.keys(marken).length) {
+      stueck.counters = marken;
+    } else {
+      delete stueck.counters;
+    }
+  }
+  renderPlaytest();
+  const ziel =
+    stuecke.length === 1 ? { name: stuecke[0].name } : { count: stuecke.length };
+  setPlaytestHinweis(
+    schritt > 0
+      ? stuecke.length === 1
+        ? t("{label} auf {name}.", { label: marke.label, ...ziel })
+        : t("{label} auf {count} Karten.", { label: marke.label, ...ziel })
+      : stuecke.length === 1
+        ? t("{label} von {name} entfernt.", { label: marke.label, ...ziel })
+        : t("{label} von {count} Karten entfernt.", { label: marke.label, ...ziel })
+  );
+}
+
+// Das Menü einer Karte im Spiel. Gehört sie zu einer Auswahl, gilt es
+// für alle ausgewählten Karten, wie die Tastenkürzel auch.
+function kartenMenuEintraege(uid) {
+  const uids = playtestAuswahl.has(uid) && playtestAuswahl.size > 1 ? [...playtestAuswahl] : [uid];
+  const stuecke = uids.map(findeStueck).filter((stueck) => stueck && playtest.board.includes(stueck));
+  const vorhanden = PT_MARKEN.filter((marke) => stuecke.some((stueck) => stueck.counters?.[marke.key]));
+  return [
+    {
+      label: "Marke hinzufügen",
+      unter: PT_MARKEN.map((marke) => ({ label: marke.label, aktion: () => markenAendern(stuecke, marke, 1) }))
+    },
+    // Wegnehmen lässt sich nur, was auch daliegt.
+    ...(vorhanden.length
+      ? [
+          {
+            label: "Marke entfernen",
+            unter: vorhanden.map((marke) => ({ label: marke.label, aktion: () => markenAendern(stuecke, marke, -1) }))
+          }
+        ]
+      : [])
+  ];
 }
 
 baueMana();

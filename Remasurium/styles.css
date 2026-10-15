@@ -688,30 +688,24 @@ body.is-playtest .desk {
 
 /* Ein Partner-Paar liegt in der Commander-Zone gestapelt, genau wie die
    Karten in der Deckansicht: Vom ersten Commander bleibt nur der
-   Namensbalken sichtbar, der zweite liegt darauf. Beim Überfahren des
-   ersten rutscht der zweite nach unten weg. Die Zone behält dabei ihre
-   Breite; ein einzelner Commander sieht aus wie bisher. Der Prozentwert
+   Namensbalken sichtbar, der zweite liegt darauf. Der Prozentwert
    bezieht sich auf die Breite, und die ist hier wie dort die einer
-   Karte - deshalb derselbe Wert wie bei .deck-card-tile. */
+   Karte - deshalb derselbe Wert wie bei .deck-card-tile.
+
+   Anders als in der Deckansicht reagiert der Stapel nicht auf den
+   Zeiger. Die Zone steht am unteren Rand des Spielfelds; aufgeklappt
+   wüchse sie nach oben und schöbe den ersten Commander über das Feld
+   hinaus. */
 .playtest-commander-karten {
   display: flow-root;
 }
 
 .playtest-commander-karten .playtest-card {
   position: relative;
-  transition: margin-top 140ms ease;
 }
 
 .playtest-commander-karten .playtest-card + .playtest-card {
   margin-top: -122.9%;
-}
-
-.playtest-commander-karten .playtest-card:hover + .playtest-card {
-  margin-top: 6px;
-}
-
-.playtest-commander-karten .playtest-card:hover {
-  z-index: 2;
 }
 
 /* Auf dem Spielfeld liegen die Karten frei, getappt um 90 Grad gedreht. */

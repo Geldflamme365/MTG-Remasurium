@@ -206,8 +206,10 @@ width is remembered for next time. You can also move it with the arrow keys.
   supplies those keywords along with the rest of a card; for a custom card
   they are unknown and nothing is flagged.
 - The playtester stacks both commanders in the command zone the way the
-  deck view stacks its cards: the first shows its name bar, pointing at it
-  slides the second aside. The zone keeps its width. Exporting writes both
+  deck view stacks its cards: the first shows its name bar, the second
+  lies on top. Unlike the deck view the stack does not open on hover; the
+  zone sits on the bottom edge and would grow off the table. The zone
+  keeps its width. Exporting writes both
   at the top of the list.
 
 Decks work without an account too. They then live in your browser and move up

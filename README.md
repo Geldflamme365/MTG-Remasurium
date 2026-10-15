@@ -207,8 +207,8 @@ width is remembered for next time. You can also move it with the arrow keys.
   they are unknown and nothing is flagged.
 - The playtester stacks both commanders in the command zone the way the
   deck view stacks its cards: the first shows its name bar, pointing at it
-  slides the second aside. The zone keeps its width,
-  and exporting writes both at the top of the list.
+  slides the second aside. The zone keeps its width. Exporting writes both
+  at the top of the list.
 
 Decks work without an account too. They then live in your browser and move up
 to your account the first time you log in.

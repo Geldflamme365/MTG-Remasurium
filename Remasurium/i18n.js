@@ -207,6 +207,8 @@ const EN = {
   "Spielstein erzeugen": "Create token",
   "Kopie": "Copy",
   "Bibliothek beim Schliessen mischen": "Shuffle library after close",
+  "Anzahl": "Number",
+  "Eigene Anzahl": "Custom number",
   "privates deck": "private deck",
   "Dieses Deck ist privat.": "This deck is private.",
   "Dieses Deck gibt es nicht.": "This deck does not exist.",

@@ -2706,3 +2706,49 @@ body.is-splitting {
 .deck-privat button[hidden] {
   display: none;
 }
+
+/* Eigene Menge am Ende eines X-Untermenüs: Feld und OK in einer Zeile. */
+.pt-menu-eingabe {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 5px 12px;
+  border-top: 1px solid #8b867c;
+}
+
+.pt-menu-eingabe label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.pt-menu-eingabe input {
+  flex: none;
+  width: 64px;
+  min-height: 0;
+  padding: 3px 6px;
+  font: inherit;
+}
+
+.pt-menu-eingabe input.is-ungueltig {
+  outline: 2px solid #c0392b;
+}
+
+.pt-menu-eingabe button {
+  min-height: 0;
+  padding: 3px 10px;
+  color: var(--ink);
+  background: var(--window-2);
+  border: 2px solid;
+  border-color: var(--edge-light) var(--edge-darker) var(--edge-darker) var(--edge-light);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pt-menu-eingabe button:hover {
+  color: #fff;
+  background: linear-gradient(180deg, #2f51d7, #10256f);
+}

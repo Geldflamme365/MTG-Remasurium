@@ -387,6 +387,12 @@ Right-clicking the library opens its menu:
 | Mill X cards | From the top into the graveyard |
 | Card actions | Look at the top card, or put it on the bottom |
 
+Every X submenu (draw, peek at the top or bottom, mill) ends in a field
+`X =` for any other number from 1 to 999. Opening the submenu puts the
+cursor there, so you can type straight away; `Enter` or OK carries it
+out, `Escape` closes the menu. Anything that is not a whole number
+leaves the menu open and marks the field red.
+
 Turning the top card over leaves it where it is; it simply lies face up
 on the pile, and a click still draws it. It remembers which card was
 turned, not merely that something was, so drawing the revealed card does

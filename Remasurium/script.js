@@ -3532,6 +3532,8 @@ const KARTEN_RUECKSEITE =
 
 // Mengen, die in den Untermenüs zur Auswahl stehen.
 const PT_MENGEN = [1, 2, 3, 5, 7, 10];
+// Mehr Karten hat kein Deck, auch kein grosses.
+const PT_MENGE_MAX = 999;
 
 const playtest = {
   library: [],
@@ -3976,6 +3978,17 @@ function menuHtml(eintraege, pfad = "") {
       if (eintrag.trenner) {
         return `<div class="pt-menu-trenner"></div>`;
       }
+      if (eintrag.eingabe) {
+        return `
+          <div class="pt-menu-eingabe" data-eingabe="${id}">
+            <label>
+              <span>X =</span>
+              <input type="number" min="1" max="${PT_MENGE_MAX}" step="1" inputmode="numeric" placeholder="${escapeHtml(t("Anzahl"))}" aria-label="${escapeHtml(t("Eigene Anzahl"))}" />
+            </label>
+            <button type="button">OK</button>
+          </div>
+        `;
+      }
       if (eintrag.zaehler) {
         const { marke, wert } = eintrag.zaehler;
         return `
@@ -4188,7 +4201,11 @@ function spielfeldMenuEintraege() {
 
 // Die Einträge des Bibliotheksmenüs.
 function bibliothekMenuEintraege() {
-  const mengen = (aktion) => PT_MENGEN.map((n) => ({ label: String(n), aktion: () => aktion(n) }));
+  // Die festen Mengen, und darunter ein Feld für jede andere Zahl.
+  const mengen = (aktion) => [
+    ...PT_MENGEN.map((n) => ({ label: String(n), aktion: () => aktion(n) })),
+    { eingabe: { aktion } }
+  ];
   return [
     { label: "Ziehen", kuerzel: "D", aktion: () => playtestZiehen(1) },
     { label: "X Karten ziehen", unter: mengen((n) => playtestZiehen(n)) },
@@ -6001,6 +6018,15 @@ els.playtestView.addEventListener("contextmenu", (event) => {
 els.playtestMenu.addEventListener("click", (event) => {
   // Eine Zeile mit Zähler bleibt offen: Plus, Minus und Wegwerfen ändern
   // nur die Zahl, ein Klick daneben tut nichts.
+  // Das Feld für eine eigene Zahl: Ein Klick hinein darf das Untermenü
+  // nicht zuklappen, erst OK führt aus.
+  const feld = event.target.closest("[data-eingabe]");
+  if (feld) {
+    if (event.target.closest("button")) {
+      eigeneMengeAusfuehren(feld);
+    }
+    return;
+  }
   const zeile = event.target.closest("[data-zaehler]");
   if (zeile) {
     const knopf = event.target.closest("[data-tun]");
@@ -6031,6 +6057,7 @@ els.playtestMenu.addEventListener("click", (event) => {
     // Erst sichtbar, dann messen: vorher hat das Untermenü keine Grösse.
     // Passt es rechts nicht mehr hin, klappt es nach links auf; steht es
     // unten über, rückt es so weit hoch, wie es muss.
+    panel.querySelector(":scope > [data-eingabe] input")?.focus({ preventScroll: true });
     let masse = panel.getBoundingClientRect();
     if (masse.right > window.innerWidth - 8) {
       panel.classList.add("nach-links");
@@ -6041,6 +6068,40 @@ els.playtestMenu.addEventListener("click", (event) => {
       panel.style.marginTop = `${-Math.min(ueberstand, masse.top - 8)}px`;
     }
   }
+});
+
+// Führt die Menge aus dem Feld aus. Ist sie keine ganze Zahl ab 1,
+// bleibt das Menü offen und das Feld wird rot markiert.
+function eigeneMengeAusfuehren(feld) {
+  const input = feld.querySelector("input");
+  const menge = Number(input.value);
+  if (!Number.isInteger(menge) || menge < 1 || menge > PT_MENGE_MAX) {
+    input.classList.add("is-ungueltig");
+    input.focus();
+    return;
+  }
+  menuEintragZuPfad(feld.dataset.eingabe)?.eingabe?.aktion(menge);
+  schliessePlaytestMenu();
+}
+
+// Im Feld: Enter führt aus, Escape schliesst das Menü. Die übrigen
+// Tastenkürzel des Playtesters lassen Eingabefelder ohnehin in Ruhe.
+els.playtestMenu.addEventListener("keydown", (event) => {
+  const feld = event.target.closest("[data-eingabe]");
+  if (!feld) {
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    eigeneMengeAusfuehren(feld);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    schliessePlaytestMenu();
+  }
+});
+
+els.playtestMenu.addEventListener("input", (event) => {
+  event.target.classList?.remove("is-ungueltig");
 });
 
 document.addEventListener("pointerdown", (event) => {

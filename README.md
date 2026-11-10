@@ -270,6 +270,51 @@ that too. To tell the two apart, `GET /decks/public/:id` answers 403
 for a private deck and 404 for a missing one; nothing else about a
 private deck leaves the server.
 
+### Folders
+
+Your own decks and the cards of your collection can be put into folders.
+A folder is not a record of its own but a path stored on the deck or
+card: `Commander/Budget` is the folder Budget inside Commander, up to
+four levels deep. The bar above the list shows where you are and lets
+you step back up.
+
+- **New folder** creates one where you stand; a slash in the name makes
+  a subfolder right away. A folder you created by hand and have not
+  filled yet is remembered by this browser only, since on the server a
+  folder exists exactly as long as something lies in it.
+- The folder button on a deck tile or a collection card opens a small
+  window: pick an existing folder, type a new path, or choose "No
+  folder".
+- **Rename folder** renames the one you are in, with everything below it.
+- **Dissolve folder** moves its contents one level up. Nothing is deleted.
+
+Folders are private. A public deck never shows which folder its owner
+keeps it in. Decks and cards that live only in the browser keep their
+folders when you log in and they move to your account.
+
+### Categories and sorting
+
+Above the card list of a deck you choose how its cards are stacked and
+in which order they lie within each stack. Both are a matter of view
+only, are remembered by the browser, and work on public decks too.
+
+**Group by category** sorts every nonland card into Board Wipe, Removal,
+Counterspell, Ramp, Tutor, Card Draw or Recursion, using the community
+tags Scryfall keeps for each card. Those tags are not part of a card
+object, but they can be searched (`otag:ramp`), so each category is
+asked once, limited to the cards of the deck. A card with several tags
+goes into the first category in that order: a board wipe is always
+removal too and still belongs with the board wipes. Cards without a
+matching tag stay in the stack of their card type, and lands are always
+just lands. The answer is kept in the browser for thirty days, keyed by
+card name, so opening the deck again costs no request. **Group by card
+type** gives the plain type stacks back.
+
+**Sort** orders the cards inside every stack by alphabet, mana value,
+type or price, ascending or, with "Order descending" ticked, the other
+way round. Ties go by name, and cards without a value, such as no known
+price, come last in either direction.
+
 ### Import and export
 
 Import sits in the deck overview and always makes a new deck. Export sits in

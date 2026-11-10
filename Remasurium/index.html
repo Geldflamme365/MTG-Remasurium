@@ -208,6 +208,7 @@
             <strong data-collection-count>0</strong>
           </div>
           <div class="panel-body">
+            <div id="collectionFolderBar" class="folder-bar"></div>
             <div id="collection" class="collection-list"></div>
           </div>
         </article>
@@ -257,6 +258,7 @@
               <div id="deckStatus" class="status muted">Bereit.</div>
             </div>
 
+            <div id="deckFolderBar" class="folder-bar"></div>
             <div id="deckList" class="deck-grid"></div>
           </div>
         </article>
@@ -336,6 +338,33 @@
                 <button id="quickAddBtn" type="button">Hinzufügen</button>
               </div>
               <p class="small-note">Nimmt den besten Treffer zum Namen, auch bei kleinen Tippfehlern.</p>
+
+              <!-- Wie die Karten gruppiert und innerhalb ihrer Stapel
+                   sortiert werden. Gilt auch beim blossen Ansehen. -->
+              <div class="deck-ordnung">
+                <label class="deck-ordnung-feld">
+                  <span>Gruppieren</span>
+                  <select id="deckGroupSelect">
+                    <option value="kategorie">Kategorie</option>
+                    <option value="typ">Kartentyp</option>
+                  </select>
+                </label>
+                <div class="sort-menu-wrap">
+                  <button id="deckSortBtn" type="button" class="retro-button" aria-haspopup="true" aria-expanded="false">Sortieren</button>
+                  <div id="deckSortMenu" class="sort-menu" hidden>
+                    <label class="check-row sort-menu-richtung">
+                      <input id="deckSortDesc" type="checkbox" />
+                      <span>Absteigend</span>
+                    </label>
+                    <div class="pt-menu-trenner"></div>
+                    <button type="button" data-sort="name">Alphabet</button>
+                    <button type="button" data-sort="cmc">Manawert</button>
+                    <button type="button" data-sort="typ">Typ</button>
+                    <button type="button" data-sort="preis">Preis</button>
+                  </div>
+                </div>
+                <span id="deckTagStatus" class="small-note deck-tag-status"></span>
+              </div>
 
               <div id="deckCards" class="deck-cards"></div>
               <p class="small-note">
@@ -718,6 +747,28 @@
   <!-- Das Kontextmenü der Bibliothek. Liegt ausserhalb des Spielfelds,
        damit es nicht an dessen Überlauf abgeschnitten wird. -->
   <div id="playtestMenu" class="pt-menu" hidden></div>
+
+  <!-- Ein Fenster für alles rund um Ordner: neu anlegen, umbenennen,
+       etwas hineinlegen. Titel, Hinweis und Vorschläge setzt das Skript. -->
+  <div id="folderModal" class="modal" aria-hidden="true">
+    <div class="modal-dialog window modal-narrow" role="dialog" aria-modal="true" aria-label="Ordner">
+      <div class="title-bar">
+        <span id="folderModalTitle">ordner</span>
+        <button id="folderModalCloseBtn" class="modal-close" type="button" aria-label="Schließen">X</button>
+      </div>
+      <form id="folderModalForm" class="modal-body">
+        <p class="small-note" id="folderModalNote"></p>
+        <label class="field-label" for="folderModalInput" id="folderModalLabel">Ordner</label>
+        <input id="folderModalInput" type="text" maxlength="170" autocomplete="off" />
+        <div id="folderModalChoices" class="folder-choices"></div>
+        <div class="button-row">
+          <button type="submit" class="retro-button">Speichern</button>
+          <button type="button" id="folderModalCancelBtn" class="retro-button">Abbrechen</button>
+        </div>
+        <div id="folderModalStatus" class="status muted" hidden></div>
+      </form>
+    </div>
+  </div>
 
   <div id="deckSettingsModal" class="modal" aria-hidden="true">
     <div class="modal-dialog window modal-narrow" role="dialog" aria-modal="true" aria-label="Deck-Einstellungen">

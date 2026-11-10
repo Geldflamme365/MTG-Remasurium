@@ -1,5 +1,5 @@
 import { api } from "./api.js";
-import { createDeckStore } from "./decks.js";
+import { createDeckStore, ordnerSaeubern } from "./decks.js";
 import { getLang, setLang, t, watchForNewContent } from "./i18n.js";
 import {
   BASIC_LANDS,
@@ -102,6 +102,23 @@ const els = {
   deckOverview: document.getElementById("deckOverview"),
   deckEditor: document.getElementById("deckEditor"),
   deckList: document.getElementById("deckList"),
+  deckFolderBar: document.getElementById("deckFolderBar"),
+  collectionFolderBar: document.getElementById("collectionFolderBar"),
+  folderModal: document.getElementById("folderModal"),
+  folderModalForm: document.getElementById("folderModalForm"),
+  folderModalTitle: document.getElementById("folderModalTitle"),
+  folderModalNote: document.getElementById("folderModalNote"),
+  folderModalLabel: document.getElementById("folderModalLabel"),
+  folderModalInput: document.getElementById("folderModalInput"),
+  folderModalChoices: document.getElementById("folderModalChoices"),
+  folderModalStatus: document.getElementById("folderModalStatus"),
+  folderModalCloseBtn: document.getElementById("folderModalCloseBtn"),
+  folderModalCancelBtn: document.getElementById("folderModalCancelBtn"),
+  deckGroupSelect: document.getElementById("deckGroupSelect"),
+  deckSortBtn: document.getElementById("deckSortBtn"),
+  deckSortMenu: document.getElementById("deckSortMenu"),
+  deckSortDesc: document.getElementById("deckSortDesc"),
+  deckTagStatus: document.getElementById("deckTagStatus"),
   deckCount: document.getElementById("deckCount"),
   deckStatus: document.getElementById("deckStatus"),
   newDeckName: document.getElementById("newDeckName"),
@@ -732,6 +749,8 @@ async function replaceCollectionCard(previousId, nextCard) {
 
   const previous = state.collection;
   const entry = entryFromCard(nextCard, state.collection[index].added_at || null);
+  // Die neue Ausgabe bleibt im Ordner der alten.
+  entry.folder = state.collection[index].folder || "";
 
   const updated = state.collection.slice();
   updated[index] = entry;
@@ -916,36 +935,55 @@ function renderResults() {
 function renderCollection() {
   updateCollectionCount();
 
-  if (!state.collection.length) {
-    els.collection.innerHTML = `<div class="empty-state">Noch keine Karten gespeichert.</div>`;
+  // Wie bei den Decks: erst die Unterordner, dann was genau hier liegt.
+  const ordner = ordnerInhalt("collection");
+  els.collectionFolderBar.innerHTML = ordnerLeisteHtml("collection");
+  bindeOrdner(els.collectionFolderBar, "collection");
+  const ordnerKacheln = ordner.unter.map((eintrag) => ordnerKachelHtml(eintrag, "collection")).join("");
+
+  if (!ordner.eintraege.length && !ordnerKacheln) {
+    els.collection.innerHTML = `<div class="empty-state">${escapeHtml(
+      ordner.pfad
+        ? t("Dieser Ordner ist leer. Leg eine Karte über das Ordner-Symbol auf ihrer Kachel hier hinein.")
+        : t("Noch keine Karten gespeichert.")
+    )}</div>`;
     return;
   }
 
   els.collection.innerHTML = `
     <div class="collection-grid">
-      ${state.collection
+      ${ordnerKacheln}
+      ${ordner.eintraege
         .map(
           (card) => `
-            <button
-              type="button"
-              class="collection-tile${state.collectionSelection?.id === card.id ? " active" : ""}"
-              data-pick="${card.id}"
-              title="${escapeHtml(card.name)}"
-            >
-              <span class="tile-frame">
-                ${
-                  card.image
-                    ? `<img src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
-                    : `<span class="collection-fallback">${escapeHtml(card.name)}</span>`
-                }
-              </span>
-              <span class="tile-caption">${escapeHtml(card.name)}</span>
-            </button>
+            <div class="collection-tile-wrap">
+              <button
+                type="button"
+                class="collection-tile${state.collectionSelection?.id === card.id ? " active" : ""}"
+                data-pick="${card.id}"
+                title="${escapeHtml(card.name)}"
+              >
+                <span class="tile-frame">
+                  ${
+                    card.image
+                      ? `<img src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+                      : `<span class="collection-fallback">${escapeHtml(card.name)}</span>`
+                  }
+                </span>
+                <span class="tile-caption">${escapeHtml(card.name)}</span>
+              </button>
+              <button type="button" class="tile-move" data-move-card="${escapeHtml(card.id)}" title="${escapeHtml(t("In Ordner legen"))}" aria-label="${escapeHtml(t("In Ordner legen"))}">&#128193;</button>
+            </div>
           `
         )
         .join("")}
     </div>
   `;
+
+  bindeOrdner(els.collection, "collection");
+  for (const knopf of els.collection.querySelectorAll("button[data-move-card]")) {
+    knopf.addEventListener("click", () => ordnerWaehlen("collection", knopf.dataset.moveCard));
+  }
 
   for (const entry of els.collection.querySelectorAll("button[data-pick]")) {
     entry.addEventListener("click", async () => {
@@ -1649,20 +1687,377 @@ function deckCardFromScryfall(card) {
   };
 }
 
+// --- Ordner ---------------------------------------------------------------
+//
+// Decks und die Karten der Collection lassen sich in Ordner legen. Ein
+// Ordner ist kein eigener Datensatz, sondern ein Pfad am Eintrag selbst:
+// "Commander/Budget" liegt in Budget innerhalb von Commander. Es gibt ihn,
+// solange etwas darin liegt. Damit man auch erst die Struktur anlegen und
+// sie dann füllen kann, merkt sich der Browser zusätzlich die Ordner, die
+// von Hand angelegt wurden und noch leer sind.
+
+const ORDNER_KEY = "remasurium.ordner";
+
+// Wo man gerade steht, je Bereich. Leer ist die oberste Ebene.
+const ordnerOrt = { decks: "", collection: "" };
+
+function ladeGemerkteOrdner() {
+  try {
+    const roh = JSON.parse(localStorage.getItem(ORDNER_KEY) || "{}");
+    return {
+      decks: Array.isArray(roh?.decks) ? roh.decks.map(ordnerSaeubern).filter(Boolean) : [],
+      collection: Array.isArray(roh?.collection) ? roh.collection.map(ordnerSaeubern).filter(Boolean) : []
+    };
+  } catch {
+    return { decks: [], collection: [] };
+  }
+}
+
+const gemerkteOrdner = ladeGemerkteOrdner();
+
+function speichereGemerkteOrdner() {
+  try {
+    localStorage.setItem(ORDNER_KEY, JSON.stringify(gemerkteOrdner));
+  } catch {
+    // Voller Speicher: Die Ordner bleiben bis zum Neuladen bestehen.
+  }
+}
+
+function ordnerEintraege(bereich) {
+  return bereich === "decks" ? state.decks : state.collection;
+}
+
+// Liegt ein Ordner in einem anderen, oder ist er es selbst?
+function liegtIn(ordner, pfad) {
+  return ordner === pfad || ordner.startsWith(`${pfad}/`);
+}
+
+function ordnerEltern(pfad) {
+  return pfad.split("/").slice(0, -1).join("/");
+}
+
+// Alle Ordner eines Bereichs samt ihren Eltern: Wer "A/B" belegt, hat
+// damit auch "A".
+function ordnerPfade(bereich) {
+  const pfade = new Set();
+  const merke = (pfad) => {
+    const teile = ordnerSaeubern(pfad).split("/").filter(Boolean);
+    for (let i = 1; i <= teile.length; i++) {
+      pfade.add(teile.slice(0, i).join("/"));
+    }
+  };
+  for (const eintrag of ordnerEintraege(bereich)) {
+    if (eintrag.folder) merke(eintrag.folder);
+  }
+  for (const pfad of gemerkteOrdner[bereich]) {
+    merke(pfad);
+  }
+  return [...pfade].sort((a, b) => a.localeCompare(b));
+}
+
+// Der Ordner, in dem man steht. Gibt es ihn nicht mehr, etwa weil er
+// aufgelöst wurde oder leer lief, geht es so weit hinauf wie nötig.
+function aktuellerOrdner(bereich) {
+  const pfade = new Set(ordnerPfade(bereich));
+  let pfad = ordnerOrt[bereich];
+  while (pfad && !pfade.has(pfad)) {
+    pfad = ordnerEltern(pfad);
+  }
+  ordnerOrt[bereich] = pfad;
+  return pfad;
+}
+
+// Was im aktuellen Ordner zu sehen ist: seine Unterordner und die
+// Einträge, die genau hier liegen.
+function ordnerInhalt(bereich) {
+  const pfad = aktuellerOrdner(bereich);
+  const tiefe = pfad ? pfad.split("/").length : 0;
+  const eintraege = ordnerEintraege(bereich);
+  const unter = ordnerPfade(bereich)
+    .filter((kandidat) => kandidat.split("/").length === tiefe + 1 && (!pfad || kandidat.startsWith(`${pfad}/`)))
+    .map((kandidat) => ({
+      pfad: kandidat,
+      name: kandidat.split("/").pop(),
+      // Gezählt wird alles darin, auch in Unterordnern.
+      anzahl: eintraege.filter((eintrag) => eintrag.folder && liegtIn(eintrag.folder, kandidat)).length
+    }));
+  return {
+    pfad,
+    unter,
+    eintraege: eintraege.filter((eintrag) => (eintrag.folder || "") === pfad)
+  };
+}
+
+function ordnerLeisteHtml(bereich) {
+  const pfad = aktuellerOrdner(bereich);
+  const teile = pfad ? pfad.split("/") : [];
+  const krumen = [
+    `<button type="button" class="folder-crumb" data-ordner-geh="">${escapeHtml(
+      t(bereich === "decks" ? "Alle Decks" : "Alle Karten")
+    )}</button>`,
+    ...teile.map(
+      (teil, index) =>
+        `<span class="folder-crumb-sep" aria-hidden="true">&rsaquo;</span><button type="button" class="folder-crumb" data-ordner-geh="${escapeHtml(
+          teile.slice(0, index + 1).join("/")
+        )}">${escapeHtml(teil)}</button>`
+    )
+  ].join("");
+
+  return `
+    <div class="folder-crumbs">${krumen}</div>
+    <div class="folder-tools">
+      <button type="button" class="retro-button" data-ordner-neu="1">${escapeHtml(t("Neuer Ordner"))}</button>
+      ${
+        pfad
+          ? `<button type="button" class="retro-button" data-ordner-umbenennen="1">${escapeHtml(t("Ordner umbenennen"))}</button>
+             <button type="button" class="retro-button" data-ordner-aufloesen="1">${escapeHtml(t("Ordner auflösen"))}</button>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function ordnerKachelHtml(ordner, bereich) {
+  const anzahl =
+    bereich === "decks"
+      ? t(ordner.anzahl === 1 ? "{count} Deck" : "{count} Decks", { count: ordner.anzahl })
+      : t(ordner.anzahl === 1 ? "{count} Karte" : "{count} Karten", { count: ordner.anzahl });
+  return `
+    <button type="button" class="folder-tile" data-ordner-geh="${escapeHtml(ordner.pfad)}" title="${escapeHtml(ordner.pfad)}">
+      <span class="folder-tile-icon" aria-hidden="true">&#128193;</span>
+      <strong>${escapeHtml(ordner.name)}</strong>
+      <span>${escapeHtml(anzahl)}</span>
+    </button>
+  `;
+}
+
+function zeichneOrdnerBereich(bereich) {
+  if (bereich === "decks") renderDeckList();
+  else renderCollection();
+}
+
+async function ladeOrdnerBereichNeu(bereich) {
+  if (bereich === "decks") await refreshDecks();
+  else renderCollection();
+}
+
+function bindeOrdner(wurzel, bereich) {
+  for (const knopf of wurzel.querySelectorAll("[data-ordner-geh]")) {
+    knopf.addEventListener("click", () => {
+      ordnerOrt[bereich] = knopf.dataset.ordnerGeh;
+      zeichneOrdnerBereich(bereich);
+    });
+  }
+  wurzel.querySelector("[data-ordner-neu]")?.addEventListener("click", () => ordnerAnlegen(bereich));
+  wurzel.querySelector("[data-ordner-umbenennen]")?.addEventListener("click", () => ordnerUmbenennen(bereich));
+  wurzel.querySelector("[data-ordner-aufloesen]")?.addEventListener("click", () => ordnerAufloesen(bereich));
+}
+
+// Legt einen Eintrag in einen Ordner, leer nimmt ihn heraus.
+async function setzeOrdner(bereich, eintrag, pfad) {
+  const ziel = ordnerSaeubern(pfad);
+  if (bereich === "decks") {
+    await deckStore.update(eintrag.id, { folder: ziel });
+    eintrag.folder = ziel;
+    return;
+  }
+  const vorher = eintrag.folder || "";
+  eintrag.folder = ziel;
+  saveCollection();
+  if (state.user) {
+    try {
+      await api.putCard(eintrag);
+    } catch (error) {
+      // Die Anzeige soll nichts behaupten, was der Server nicht hat.
+      eintrag.folder = vorher;
+      throw error;
+    }
+  }
+}
+
+// Hängt alles, was in einem Ordner liegt, an eine andere Stelle. Damit
+// gehen Umbenennen und Auflösen: Beim Auflösen ist das Ziel der Ordner
+// darüber.
+async function ordnerUmziehen(bereich, alt, neu) {
+  const umgesetzt = (ordner) => ordnerSaeubern(`${neu}/${ordner.slice(alt.length)}`);
+  for (const eintrag of ordnerEintraege(bereich).filter((e) => e.folder && liegtIn(e.folder, alt))) {
+    await setzeOrdner(bereich, eintrag, umgesetzt(eintrag.folder));
+  }
+  gemerkteOrdner[bereich] = [
+    ...new Set(
+      gemerkteOrdner[bereich]
+        .map((pfad) => (liegtIn(pfad, alt) ? umgesetzt(pfad) : pfad))
+        .filter(Boolean)
+    )
+  ];
+  speichereGemerkteOrdner();
+}
+
+// --- Das Ordner-Fenster ---------------------------------------------------
+
+let ordnerFrage = null;
+
+function frageOrdner({ titel, hinweis = "", label, wert = "", platzhalter = "", vorschlaege = null, ok }) {
+  ordnerFrage = ok;
+  els.folderModalTitle.textContent = titel;
+  els.folderModalNote.textContent = hinweis;
+  els.folderModalNote.hidden = !hinweis;
+  els.folderModalLabel.textContent = label;
+  els.folderModalInput.value = wert;
+  els.folderModalInput.placeholder = platzhalter;
+  els.folderModalStatus.hidden = true;
+  // Vorschläge sind vorhandene Ordner. Ein Klick trägt den Pfad ein und
+  // speichert gleich.
+  els.folderModalChoices.innerHTML = vorschlaege
+    ? [
+        `<button type="button" class="folder-choice" data-wahl="">${escapeHtml(t("Kein Ordner"))}</button>`,
+        ...vorschlaege.map(
+          (pfad) =>
+            `<button type="button" class="folder-choice${pfad === wert ? " is-aktiv" : ""}" data-wahl="${escapeHtml(
+              pfad
+            )}">&#128193; ${escapeHtml(pfad)}</button>`
+        )
+      ].join("")
+    : "";
+  openModal(els.folderModal);
+  els.folderModalInput.focus();
+  els.folderModalInput.select();
+}
+
+async function ordnerFrageAbschliessen(wert) {
+  if (!ordnerFrage) {
+    return;
+  }
+  schreibeStatus(els.folderModalStatus, t("Wird gespeichert..."), "muted");
+  els.folderModalStatus.hidden = false;
+  try {
+    await ordnerFrage(wert);
+    ordnerFrage = null;
+    closeModal(els.folderModal);
+  } catch (error) {
+    schreibeStatus(els.folderModalStatus, error.message, "err");
+  }
+}
+
+function ordnerAnlegen(bereich) {
+  const hier = aktuellerOrdner(bereich);
+  frageOrdner({
+    titel: t("neuer ordner"),
+    hinweis: hier
+      ? t("Der Ordner entsteht in {ordner}.", { ordner: hier })
+      : t("Mit einem Schrägstrich legst du gleich einen Unterordner an, etwa Commander/Budget."),
+    label: t("Name des Ordners"),
+    platzhalter: t("z.B. Commander"),
+    ok: async (wert) => {
+      const pfad = ordnerSaeubern(`${hier}/${wert}`);
+      if (!ordnerSaeubern(wert)) {
+        throw new Error(t("Der Ordner braucht einen Namen."));
+      }
+      if (!gemerkteOrdner[bereich].includes(pfad)) {
+        gemerkteOrdner[bereich].push(pfad);
+        speichereGemerkteOrdner();
+      }
+      zeichneOrdnerBereich(bereich);
+    }
+  });
+}
+
+function ordnerUmbenennen(bereich) {
+  const alt = aktuellerOrdner(bereich);
+  if (!alt) {
+    return;
+  }
+  frageOrdner({
+    titel: t("ordner umbenennen"),
+    label: t("Name des Ordners"),
+    wert: alt.split("/").pop(),
+    ok: async (wert) => {
+      const name = ordnerSaeubern(wert).split("/")[0];
+      if (!name) {
+        throw new Error(t("Der Ordner braucht einen Namen."));
+      }
+      const neu = ordnerSaeubern(`${ordnerEltern(alt)}/${name}`);
+      if (neu !== alt) {
+        await ordnerUmziehen(bereich, alt, neu);
+        ordnerOrt[bereich] = neu;
+      }
+      await ladeOrdnerBereichNeu(bereich);
+    }
+  });
+}
+
+async function ordnerAufloesen(bereich) {
+  const pfad = aktuellerOrdner(bereich);
+  if (!pfad) {
+    return;
+  }
+  const eltern = ordnerEltern(pfad);
+  const frage = t(
+    'Ordner "{name}" auflösen? Was darin liegt, wandert eine Ebene nach oben. Gelöscht wird nichts.',
+    { name: pfad.split("/").pop() }
+  );
+  if (!window.confirm(frage)) {
+    return;
+  }
+  try {
+    await ordnerUmziehen(bereich, pfad, eltern);
+    ordnerOrt[bereich] = eltern;
+  } catch (error) {
+    (bereich === "decks" ? setDeckStatus : setStatus)(error.message, "err");
+  }
+  await ladeOrdnerBereichNeu(bereich);
+}
+
+// Öffnet das Fenster, um ein Deck oder eine Karte der Collection in einen
+// Ordner zu legen.
+function ordnerWaehlen(bereich, id) {
+  const eintrag = ordnerEintraege(bereich).find((kandidat) => kandidat.id === id);
+  if (!eintrag) {
+    return;
+  }
+  frageOrdner({
+    titel: t("in ordner legen"),
+    hinweis: t("{name}: Wähle einen Ordner oder tipp einen neuen. Ein Schrägstrich trennt Unterordner.", {
+      name: eintrag.name
+    }),
+    label: t("Ordner"),
+    wert: eintrag.folder || "",
+    platzhalter: t("z.B. Commander/Budget"),
+    vorschlaege: ordnerPfade(bereich),
+    ok: async (wert) => {
+      await setzeOrdner(bereich, eintrag, wert);
+      await ladeOrdnerBereichNeu(bereich);
+    }
+  });
+}
+
 function aktuelleDeckListe() {
   return state.deckTab === "community" ? state.communityDecks : state.decks;
 }
 
 function renderDeckList() {
   const fremd = state.deckTab === "community";
-  const decks = aktuelleDeckListe();
-  els.deckCount.textContent = `${decks.length} ${decks.length === 1 ? "deck" : "decks"}`;
+  const alle = aktuelleDeckListe();
+  // Ordner gibt es nur für die eigenen Decks. Gezeigt wird, was im
+  // aktuellen Ordner liegt, davor seine Unterordner.
+  const ordner = fremd ? null : ordnerInhalt("decks");
+  const decks = ordner ? ordner.eintraege : alle;
+  els.deckCount.textContent = `${alle.length} ${alle.length === 1 ? "deck" : "decks"}`;
 
-  if (!decks.length) {
+  els.deckFolderBar.hidden = fremd;
+  if (!fremd) {
+    els.deckFolderBar.innerHTML = ordnerLeisteHtml("decks");
+    bindeOrdner(els.deckFolderBar, "decks");
+  }
+  const ordnerKacheln = ordner ? ordner.unter.map((eintrag) => ordnerKachelHtml(eintrag, "decks")).join("") : "";
+
+  if (!decks.length && !ordnerKacheln) {
     els.deckList.innerHTML = `<div class="empty-state">${escapeHtml(
       fremd
         ? t("Noch hat niemand ein Deck öffentlich gestellt.")
-        : t("Noch keine Decks. Gib oben einen Namen ein und leg los.")
+        : ordner.pfad
+          ? t("Dieser Ordner ist leer. Leg ein Deck über das Ordner-Symbol auf seiner Kachel hier hinein.")
+          : t("Noch keine Decks. Gib oben einen Namen ein und leg los.")
     )}</div>`;
     return;
   }
@@ -1674,7 +2069,7 @@ function renderDeckList() {
         )}" alt="Artwork von ${escapeHtml(deck.commander.name || "")}" loading="lazy" />`
       : `<span class="deck-tile-empty">Kein Commander gewählt</span>`;
 
-  els.deckList.innerHTML = decks
+  els.deckList.innerHTML = ordnerKacheln + decks
     .map((deck) => {
       // Commander und Partner zählen beim Preis mit wie bei der Kartenzahl.
       const preis = preisSumme([
@@ -1729,6 +2124,7 @@ function renderDeckList() {
             </span>
           </button>
           <button type="button" class="deck-tile-rename" data-rename="${escapeHtml(deck.id)}" title="Deck umbenennen" aria-label="${escapeHtml(deck.name)} umbenennen">✎</button>
+          <button type="button" class="deck-tile-rename deck-tile-move" data-move="${escapeHtml(deck.id)}" title="${escapeHtml(t("In Ordner legen"))}" aria-label="${escapeHtml(t("In Ordner legen"))}">&#128193;</button>
         </div>
       `;
     })
@@ -1744,6 +2140,11 @@ function renderDeckList() {
     tile.addEventListener("click", () => {
       window.location.hash = `#/decks/${encodeURIComponent(tile.dataset.publicDeck)}`;
     });
+  }
+
+  bindeOrdner(els.deckList, "decks");
+  for (const btn of els.deckList.querySelectorAll("button[data-move]")) {
+    btn.addEventListener("click", () => ordnerWaehlen("decks", btn.dataset.move));
   }
 
   for (const btn of els.deckList.querySelectorAll("button[data-rename]")) {
@@ -2302,24 +2703,353 @@ function cardCategory(card) {
   return typKategorie(cardInfoCache.get(card.id)?.typeLine || "");
 }
 
-function groupCardsByType(cards) {
+// --- Gruppieren und Sortieren ---------------------------------------------
+//
+// Die Karten eines Decks liegen in Stapeln. Wonach gestapelt wird und in
+// welcher Reihenfolge die Karten darin liegen, lässt sich wählen und wird
+// im Browser gemerkt. Das ist reine Ansicht: Am Deck ändert es nichts,
+// darum geht es auch bei fremden Decks.
+
+const DECK_ANSICHT_KEY = "remasurium.deckAnsicht";
+const DECK_SORTIERUNGEN = { name: "Alphabet", cmc: "Manawert", typ: "Typ", preis: "Preis" };
+
+function ladeDeckAnsicht() {
+  const standard = { gruppe: "kategorie", sort: "name", absteigend: false };
+  try {
+    const roh = JSON.parse(localStorage.getItem(DECK_ANSICHT_KEY) || "{}");
+    return {
+      gruppe: roh?.gruppe === "typ" ? "typ" : standard.gruppe,
+      sort: DECK_SORTIERUNGEN[roh?.sort] ? roh.sort : standard.sort,
+      absteigend: Boolean(roh?.absteigend)
+    };
+  } catch {
+    return standard;
+  }
+}
+
+const deckAnsicht = ladeDeckAnsicht();
+
+function speichereDeckAnsicht() {
+  try {
+    localStorage.setItem(DECK_ANSICHT_KEY, JSON.stringify(deckAnsicht));
+  } catch {
+    // Dann gilt die Wahl eben nur bis zum Neuladen.
+  }
+}
+
+const TYP_REIHENFOLGE = [...CARD_TYPES.map((eintrag) => eintrag.label), "Sonstige"];
+const LAND_LABEL = typKategorie("Land");
+
+// Sortiert die Karten eines Stapels. Der Name entscheidet bei Gleichstand
+// und steht dabei immer von A nach Z. Karten ohne Wert, etwa ohne Preis,
+// stehen am Ende, egal in welche Richtung sortiert wird.
+function sortiereStapel(cards) {
+  const richtung = deckAnsicht.absteigend ? -1 : 1;
+  const nachName = (a, b) => a.name.localeCompare(b.name);
+  const wert = {
+    cmc: (card) => cardInfoCache.get(card.id)?.cmc ?? null,
+    typ: (card) => TYP_REIHENFOLGE.indexOf(cardCategory(card)),
+    preis: (card) => kartenPreis(card.id)
+  }[deckAnsicht.sort];
+
+  return cards.slice().sort((a, b) => {
+    if (!wert) {
+      return nachName(a, b) * richtung;
+    }
+    const x = wert(a);
+    const y = wert(b);
+    if (x === null || y === null) {
+      return x === y ? nachName(a, b) : x === null ? 1 : -1;
+    }
+    return x === y ? nachName(a, b) : (x - y) * richtung;
+  });
+}
+
+// --- Kategorien aus den Tags von Scryfall ---------------------------------
+//
+// Scryfall führt zu jeder Karte Tags aus dem Tagger, etwa "ramp" oder
+// "removal". Am Kartenobjekt stehen sie nicht, sie lassen sich aber
+// suchen: otag:ramp trifft alle Karten mit diesem Tag. Gefragt wird
+// deshalb je Kategorie einmal, eingeschränkt auf die Karten des Decks.
+// Das Ergebnis hängt am Kartennamen und bleibt dreissig Tage im Browser,
+// damit ein Deck beim zweiten Öffnen keine Abfrage mehr kostet.
+//
+// Die Reihenfolge ist zugleich der Vorrang: Trägt eine Karte mehrere
+// Tags, landet sie in der ersten passenden Kategorie. Ein Board Wipe ist
+// immer auch Removal und soll trotzdem bei den Board Wipes liegen.
+// Manche Tags haben mehrere Namen; jede Schreibweise wird einzeln
+// gefragt, und eine, die Scryfall nicht kennt, schadet den anderen nicht.
+const TAG_KATEGORIEN = [
+  { key: "boardwipe", label: "Board Wipe", suchen: ["otag:board-wipe", "otag:sweeper"] },
+  { key: "removal", label: "Removal", suchen: ["otag:removal"] },
+  { key: "counter", label: "Counterspell", suchen: ["otag:counterspell"] },
+  // Ramp vor Tutor: Karten wie Cultivate suchen ein Land und tragen
+  // deshalb beide Tags, gespielt werden sie als Ramp.
+  { key: "ramp", label: "Ramp", suchen: ["otag:ramp"] },
+  { key: "tutor", label: "Tutor", suchen: ["otag:tutor"] },
+  { key: "draw", label: "Card Draw", suchen: ["otag:draw", "otag:card-advantage"] },
+  { key: "recursion", label: "Recursion", suchen: ["otag:recursion"] }
+];
+
+const KARTEN_TAGS_KEY = "remasurium.kartenTags";
+const KARTEN_TAGS_VERSION = 1;
+const KARTEN_TAGS_TTL = 30 * 24 * 60 * 60 * 1000;
+const KARTEN_TAGS_MAX = 4000;
+// Scryfall nimmt Suchen bis 1000 Zeichen an; etwas Luft bleibt.
+const TAG_SUCHE_MAX = 850;
+
+// Kartenname (klein) -> { k: [Kategorien], t: Zeitpunkt }
+const kartenTags = new Map();
+
+function ladeKartenTags() {
+  try {
+    const roh = JSON.parse(localStorage.getItem(KARTEN_TAGS_KEY) || "null");
+    if (roh?.v !== KARTEN_TAGS_VERSION || typeof roh.karten !== "object") {
+      return;
+    }
+    const grenze = Date.now() - KARTEN_TAGS_TTL;
+    for (const [name, eintrag] of Object.entries(roh.karten)) {
+      if (eintrag?.t > grenze && Array.isArray(eintrag.k)) {
+        kartenTags.set(name, eintrag);
+      }
+    }
+  } catch {
+    // Kaputte Ablage: Es wird einfach neu gefragt.
+  }
+}
+
+function speichereKartenTags() {
+  const behalten = [...kartenTags.entries()]
+    .filter(([, eintrag]) => eintrag.t)
+    .sort((a, b) => b[1].t - a[1].t)
+    .slice(0, KARTEN_TAGS_MAX);
+  try {
+    localStorage.setItem(
+      KARTEN_TAGS_KEY,
+      JSON.stringify({ v: KARTEN_TAGS_VERSION, karten: Object.fromEntries(behalten) })
+    );
+  } catch {
+    localStorage.removeItem(KARTEN_TAGS_KEY);
+  }
+}
+
+ladeKartenTags();
+
+function tagSchluessel(card) {
+  return String(card.name || "").toLowerCase();
+}
+
+// Bei doppelseitigen Karten findet die Suche nach dem genauen Namen die
+// Vorderseite, nicht "Vorne // Hinten".
+function tagSuchname(card) {
+  return String(card.name || "").split(" // ")[0].trim();
+}
+
+// Länder bekommen keine Kategorie, eigene Karten kennt Scryfall nicht,
+// und solange der Typ fehlt, ist nicht klar, ob es ein Land ist.
+function brauchtKategorie(card) {
+  const info = cardInfoCache.get(card.id);
+  return (
+    !istEigeneKarte(card.id) &&
+    Boolean(info?.typeLine) &&
+    cardCategory(card) !== LAND_LABEL &&
+    Boolean(tagSuchname(card)) &&
+    !tagSuchname(card).includes('"')
+  );
+}
+
+// Fragt eine Schreibweise eines Tags für eine Handvoll Karten ab und
+// liefert die Namen der Treffer, klein geschrieben, samt der Namen ihrer
+// Seiten.
+async function tagSuche(suche, namen) {
+  const frage = `${suche} (${namen.map((name) => `!"${name}"`).join(" or ")})`;
+  const response = await scryfallFetch(
+    `https://api.scryfall.com/cards/search?unique=cards&q=${encodeURIComponent(frage)}`
+  );
+  // 404 heisst bei Scryfall: kein Treffer. Das ist eine gültige Antwort.
+  if (response.status === 404) {
+    return [];
+  }
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  return (data.data || []).flatMap((karte) =>
+    [karte.name, ...(karte.card_faces || []).map((seite) => seite.name)]
+      .filter(Boolean)
+      .map((name) => name.toLowerCase())
+  );
+}
+
+let kategorienLauf = 0;
+
+// Holt die Kategorien für alle Karten, zu denen noch nichts bekannt ist.
+// Liefert true, wenn dabei etwas Neues herauskam.
+async function ensureKartenTags(cards) {
+  const offen = new Map();
+  for (const card of cards) {
+    if (brauchtKategorie(card) && !kartenTags.has(tagSchluessel(card))) {
+      offen.set(tagSchluessel(card), tagSuchname(card));
+    }
+  }
+  if (!offen.size) {
+    return false;
+  }
+
+  // In Portionen, damit die Suche nicht zu lang wird.
+  const portionen = [];
+  let portion = [];
+  let laenge = 0;
+  for (const eintrag of offen) {
+    const zuwachs = eintrag[1].length + 8;
+    if (portion.length && laenge + zuwachs > TAG_SUCHE_MAX) {
+      portionen.push(portion);
+      portion = [];
+      laenge = 0;
+    }
+    portion.push(eintrag);
+    laenge += zuwachs;
+  }
+  portionen.push(portion);
+
+  let fehler = null;
+  for (const teil of portionen) {
+    const namen = teil.map(([, suchname]) => suchname);
+    const treffer = new Map(teil.map(([schluessel]) => [schluessel, []]));
+    let vollstaendig = true;
+
+    for (const kategorie of TAG_KATEGORIEN) {
+      let gelungen = false;
+      for (const suche of kategorie.suchen) {
+        try {
+          const gefunden = new Set(await tagSuche(suche, namen));
+          gelungen = true;
+          for (const [schluessel, suchname] of teil) {
+            const liste = treffer.get(schluessel);
+            if (
+              (gefunden.has(schluessel) || gefunden.has(suchname.toLowerCase())) &&
+              !liste.includes(kategorie.key)
+            ) {
+              liste.push(kategorie.key);
+            }
+          }
+        } catch (error) {
+          // Eine unbekannte Schreibweise oder ein Aussetzer: Die anderen
+          // Schreibweisen dieser Kategorie zählen trotzdem.
+          fehler = error;
+        }
+      }
+      if (!gelungen) {
+        vollstaendig = false;
+      }
+    }
+
+    // Gemerkt wird nur, was vollständig abgefragt wurde. Sonst stünde
+    // eine Karte dreissig Tage lang ohne Kategorie da, bloss weil
+    // Scryfall einmal nicht antwortete. Für diese Sitzung gilt das
+    // Teilergebnis trotzdem.
+    for (const [schluessel, liste] of treffer) {
+      kartenTags.set(schluessel, { k: liste, t: vollstaendig ? Date.now() : 0 });
+    }
+    if (!vollstaendig) {
+      speichereKartenTags();
+      throw fehler || new Error("Scryfall");
+    }
+  }
+
+  speichereKartenTags();
+  return true;
+}
+
+function setzeTagStatus(text) {
+  els.deckTagStatus.textContent = text;
+}
+
+// Lädt die Kategorien im Hintergrund und zeichnet die Karten neu, sobald
+// sie da sind. Bis dahin liegen die Karten nach ihrem Typ.
+async function ladeKategorien() {
+  if (deckAnsicht.gruppe !== "kategorie" || !state.activeDeck) {
+    setzeTagStatus("");
+    return;
+  }
+  const lauf = ++kategorienLauf;
+  const deckId = state.activeDeck.id;
+  const cards = state.activeDeckCards.slice();
+  if (!cards.some((card) => brauchtKategorie(card) && !kartenTags.has(tagSchluessel(card)))) {
+    setzeTagStatus("");
+    return;
+  }
+
+  setzeTagStatus(t("Kategorien werden von Scryfall geladen..."));
+  let meldung = "";
+  try {
+    await ensureKartenTags(cards);
+  } catch {
+    meldung = t("Kategorien konnten nicht vollständig geladen werden.");
+  }
+  // Inzwischen ein anderes Deck offen oder ein neuerer Lauf unterwegs?
+  if (lauf !== kategorienLauf || state.activeDeck?.id !== deckId) {
+    return;
+  }
+  setzeTagStatus(meldung);
+  renderDeckCards();
+}
+
+// In welchem Stapel eine Karte liegt. Länder bleiben immer Länder; alles
+// andere bekommt seine Kategorie und fällt ohne passendes Tag auf den
+// Kartentyp zurück.
+function kartenGruppe(card) {
+  const typ = cardCategory(card);
+  if (deckAnsicht.gruppe !== "kategorie" || typ === LAND_LABEL) {
+    return typ;
+  }
+  const tags = kartenTags.get(tagSchluessel(card))?.k;
+  const kategorie = tags?.length ? TAG_KATEGORIEN.find((eintrag) => tags.includes(eintrag.key)) : null;
+  return kategorie ? kategorie.label : typ;
+}
+
+function gruppiereDeckKarten(cards) {
   const gruppen = new Map();
   for (const card of cards) {
-    const label = cardCategory(card);
+    const label = kartenGruppe(card);
     if (!gruppen.has(label)) {
       gruppen.set(label, []);
     }
     gruppen.get(label).push(card);
   }
 
-  const reihenfolge = [...CARD_TYPES.map((eintrag) => eintrag.label), "Sonstige"];
+  // Erst die Kategorien, dann die Kartentypen, Länder darin zuletzt wie
+  // bisher.
+  const reihenfolge = [...TAG_KATEGORIEN.map((eintrag) => eintrag.label), ...TYP_REIHENFOLGE];
   return reihenfolge
     .filter((label) => gruppen.has(label))
     .map((label) => ({
       label,
-      cards: gruppen.get(label),
+      cards: sortiereStapel(gruppen.get(label)),
       count: gruppen.get(label).reduce((summe, card) => summe + card.quantity, 0)
     }));
+}
+
+function zeigeDeckAnsicht() {
+  els.deckGroupSelect.value = deckAnsicht.gruppe;
+  els.deckSortDesc.checked = deckAnsicht.absteigend;
+  els.deckSortBtn.textContent = `${t("Sortieren")}: ${t(DECK_SORTIERUNGEN[deckAnsicht.sort])} ${
+    deckAnsicht.absteigend ? "↓" : "↑"
+  }`;
+  for (const knopf of els.deckSortMenu.querySelectorAll("button[data-sort]")) {
+    knopf.classList.toggle("is-aktiv", knopf.dataset.sort === deckAnsicht.sort);
+  }
+}
+
+function zeigeSortMenu(offen) {
+  els.deckSortMenu.hidden = !offen;
+  els.deckSortBtn.setAttribute("aria-expanded", offen ? "true" : "false");
+}
+
+function deckAnsichtGeaendert() {
+  speichereDeckAnsicht();
+  zeigeDeckAnsicht();
+  renderDeckCards();
 }
 
 function renderDeckCards() {
@@ -2406,7 +3136,7 @@ function renderDeckCards() {
   const eingeklappt = state.deckSearchCollapsed;
   els.deckCards.classList.toggle("is-grid", eingeklappt);
 
-  els.deckCards.innerHTML = groupCardsByType(cards)
+  els.deckCards.innerHTML = gruppiereDeckKarten(cards)
     .map(
       (gruppe) => `
         <div class="deck-group">
@@ -3042,6 +3772,9 @@ async function checkDeckLegality() {
     // lässt sich eine frisch hinzugefügte Karte richtig einsortieren
     // (vorher stünde sie unter "Sonstige") und rot umranden.
     renderDeckCards();
+    // Erst jetzt steht fest, welche Karten Länder sind; die übrigen
+    // bekommen ihre Kategorie.
+    ladeKategorien();
     renderDeckStats();
     renderCommanderSlot();
   } catch {
@@ -6588,6 +7321,55 @@ window.addEventListener("keydown", (event) => {
 
 els.openDeckSettingsBtn.addEventListener("click", openDeckSettings);
 els.deckSettingsCloseBtn.addEventListener("click", () => closeModal(els.deckSettingsModal));
+
+// Das Ordner-Fenster: Speichern nimmt, was im Feld steht, ein Vorschlag
+// trägt seinen Pfad ein und speichert gleich.
+els.folderModalForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  ordnerFrageAbschliessen(els.folderModalInput.value);
+});
+els.folderModalChoices.addEventListener("click", (event) => {
+  const wahl = event.target.closest("[data-wahl]");
+  if (wahl) {
+    els.folderModalInput.value = wahl.dataset.wahl;
+    ordnerFrageAbschliessen(wahl.dataset.wahl);
+  }
+});
+for (const knopf of [els.folderModalCloseBtn, els.folderModalCancelBtn]) {
+  knopf.addEventListener("click", () => closeModal(els.folderModal));
+}
+els.folderModal.addEventListener("click", (event) => {
+  if (event.target === els.folderModal) {
+    closeModal(els.folderModal);
+  }
+});
+
+// Gruppieren und Sortieren der Deckansicht.
+els.deckGroupSelect.addEventListener("change", () => {
+  deckAnsicht.gruppe = els.deckGroupSelect.value === "typ" ? "typ" : "kategorie";
+  deckAnsichtGeaendert();
+  ladeKategorien();
+});
+els.deckSortBtn.addEventListener("click", () => zeigeSortMenu(els.deckSortMenu.hidden));
+els.deckSortDesc.addEventListener("change", () => {
+  deckAnsicht.absteigend = els.deckSortDesc.checked;
+  deckAnsichtGeaendert();
+});
+els.deckSortMenu.addEventListener("click", (event) => {
+  const knopf = event.target.closest("button[data-sort]");
+  if (!knopf) {
+    return;
+  }
+  deckAnsicht.sort = knopf.dataset.sort;
+  deckAnsichtGeaendert();
+  zeigeSortMenu(false);
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!els.deckSortMenu.hidden && !event.target.closest(".sort-menu-wrap")) {
+    zeigeSortMenu(false);
+  }
+});
+zeigeDeckAnsicht();
 els.deckPublicToggle.addEventListener("change", deckSichtbarkeitAendern);
 els.deckSettingsModal.addEventListener("click", (event) => {
   if (event.target === els.deckSettingsModal) {

@@ -2752,3 +2752,226 @@ body.is-splitting {
   color: #fff;
   background: linear-gradient(180deg, #2f51d7, #10256f);
 }
+
+/* --- Ordner ------------------------------------------------------------ */
+
+/* Die Leiste über der Liste: links der Weg zum aktuellen Ordner, rechts
+   was man mit ihm tun kann. */
+.folder-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 12px 0;
+}
+
+.folder-bar[hidden] {
+  display: none;
+}
+
+.folder-crumbs,
+.folder-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.folder-crumb {
+  padding: 2px 6px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.folder-crumb:hover {
+  border-color: #615d54;
+}
+
+.folder-crumb:last-child {
+  text-decoration: underline;
+}
+
+.folder-crumb-sep {
+  color: var(--muted);
+}
+
+.folder-tile {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  min-height: 120px;
+  padding: 12px;
+  color: var(--ink);
+  background: linear-gradient(180deg, #ece8de, #d7d2c8);
+  border: 2px solid;
+  border-color: var(--edge-light) #615d54 #615d54 var(--edge-light);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.folder-tile:hover {
+  filter: brightness(1.03);
+}
+
+.folder-tile strong {
+  overflow-wrap: anywhere;
+}
+
+.folder-tile span:last-child {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.folder-tile-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+/* Der Knopf "in Ordner legen" sitzt neben dem Stift der Deckkachel. */
+.deck-tile-move {
+  right: 42px;
+}
+
+.collection-tile-wrap {
+  position: relative;
+  display: grid;
+}
+
+.tile-move {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 2px 6px;
+  opacity: 0;
+  color: var(--ink);
+  background: linear-gradient(180deg, #efebe1, #cbc6bc);
+  border: 2px solid;
+  border-color: var(--edge-light) #615d54 #615d54 var(--edge-light);
+  font: inherit;
+  cursor: pointer;
+}
+
+.collection-tile-wrap:hover .tile-move,
+.collection-tile-wrap:focus-within .tile-move {
+  opacity: 1;
+}
+
+/* Ohne Maus gibt es kein Überfahren: Dort stehen die Knöpfe immer da. */
+@media (hover: none) {
+  .tile-move,
+  .deck-tile-move {
+    opacity: 1;
+  }
+}
+
+.folder-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.folder-choices:empty {
+  display: none;
+}
+
+.folder-choice {
+  padding: 4px 10px;
+  color: var(--ink);
+  background: linear-gradient(180deg, #efebe1, #cbc6bc);
+  border: 2px solid;
+  border-color: var(--edge-light) #615d54 #615d54 var(--edge-light);
+  font: inherit;
+  cursor: pointer;
+}
+
+.folder-choice.is-aktiv {
+  outline: 2px solid #9e87e2;
+}
+
+#folderModalInput {
+  width: 100%;
+}
+
+/* --- Gruppieren und Sortieren der Deckansicht -------------------------- */
+
+.deck-ordnung {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 14px 0 6px;
+}
+
+.deck-ordnung-feld {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deck-ordnung-feld select {
+  width: auto;
+}
+
+.deck-tag-status {
+  margin: 0;
+}
+
+.sort-menu-wrap {
+  position: relative;
+}
+
+.sort-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  display: grid;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--window-2);
+  border: 2px solid;
+  border-color: var(--edge-light) var(--edge-darker) var(--edge-darker) var(--edge-light);
+  box-shadow: 3px 3px 0 rgba(4, 3, 14, 0.5);
+}
+
+.sort-menu[hidden] {
+  display: none;
+}
+
+.sort-menu-richtung {
+  margin: 0;
+  padding: 6px 10px;
+}
+
+.sort-menu button {
+  padding: 7px 12px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort-menu button:hover {
+  color: #fff;
+  background: linear-gradient(180deg, #2f51d7, #10256f);
+}
+
+.sort-menu button.is-aktiv {
+  font-weight: 700;
+}
+
+.sort-menu button.is-aktiv::before {
+  content: "\2713  ";
+}

@@ -21,6 +21,18 @@ function saveLocal(decks) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(decks));
 }
 
+// Ein Ordner ist ein Pfad wie "Commander/Budget". Dieselbe Regel wie im
+// Worker: leere Teile fallen weg, höchstens vier Ebenen, Namen bis 40
+// Zeichen. Ohne Inhalt bleibt der leere Text, also "in keinem Ordner".
+export function ordnerSaeubern(wert) {
+  return String(wert ?? "")
+    .split("/")
+    .map((teil) => teil.replace(/\s+/g, " ").trim().slice(0, 40))
+    .filter(Boolean)
+    .slice(0, 4)
+    .join("/");
+}
+
 function countCards(cards) {
   return (cards || []).reduce((sum, card) => sum + (Number(card.quantity) || 1), 0);
 }
@@ -32,6 +44,7 @@ function publicDeck(deck) {
     format: deck.format || "commander",
     commander: deck.commander || null,
     partner: deck.partner || null,
+    folder: deck.folder || "",
     // Ohne Konto gibt es niemanden, der ein Deck veröffentlichen könnte:
     // Es liegt nur in diesem Browser. Das Feld steht trotzdem da, damit
     // die Oberfläche nicht zwei Formen auseinanderhalten muss.
@@ -86,6 +99,7 @@ export function createDeckStore({ isLoggedIn }) {
         format: deck.format || "commander",
         commander: deck.commander || null,
         partner: deck.partner || null,
+        folder: deck.folder || "",
         cards: (deck.cards || []).map((card) => ({ ...card }))
       }));
     },
@@ -151,6 +165,10 @@ export function createDeckStore({ isLoggedIn }) {
 
       if (changes.isPublic !== undefined) {
         throw new Error("Ein Deck lässt sich nur mit Konto veröffentlichen.");
+      }
+
+      if (changes.folder !== undefined) {
+        deck.folder = ordnerSaeubern(changes.folder);
       }
 
       // Commander und Partner funktionieren gleich. Gleiche Regel wie im

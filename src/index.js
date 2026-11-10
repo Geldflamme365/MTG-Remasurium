@@ -107,8 +107,24 @@ function cardFromRow(row) {
     set_name: row.set_name,
     released_at: row.released_at,
     image: row.image,
-    added_at: row.added_at
+    added_at: row.added_at,
+    folder: row.folder || ""
   };
+}
+
+// Ein Ordner ist ein Pfad wie "Commander/Budget". Aufgeräumt wird hier:
+// leere Teile fallen weg, mehr als vier Ebenen und überlange Namen
+// werden gekappt. Ohne Inhalt bleibt null, also "in keinem Ordner".
+const MAX_FOLDER_DEPTH = 4;
+const MAX_FOLDER_NAME = 40;
+
+function cleanFolder(value) {
+  const teile = String(value ?? "")
+    .split("/")
+    .map((teil) => teil.replace(/\s+/g, " ").trim().slice(0, MAX_FOLDER_NAME))
+    .filter(Boolean)
+    .slice(0, MAX_FOLDER_DEPTH);
+  return teile.length ? teile.join("/") : null;
 }
 
 async function resolveSession(request, env) {
@@ -402,7 +418,21 @@ async function handlePutCard(request, env, user, cardId) {
     )
     .run();
 
-  return json({ card });
+  // Der Ordner wird nur angefasst, wenn er mitgeschickt wurde. Ein
+  // Versionswechsel ohne dieses Feld lässt die Karte, wo sie liegt.
+  if (body?.folder !== undefined) {
+    await env.DB.prepare("UPDATE collection_cards SET folder = ? WHERE user_id = ? AND card_id = ?")
+      .bind(cleanFolder(body.folder), user.id, card.id)
+      .run();
+  }
+
+  const row = await env.DB.prepare(
+    "SELECT * FROM collection_cards WHERE user_id = ? AND card_id = ?"
+  )
+    .bind(user.id, card.id)
+    .first();
+
+  return json({ card: row ? cardFromRow(row) : card });
 }
 
 async function handleDeleteCard(env, user, cardId) {
@@ -426,10 +456,13 @@ async function handleMergeCollection(request, env, user) {
 
   if (cards.length) {
     const statement = env.DB.prepare(
-      `INSERT INTO collection_cards (user_id, card_id, name, set_name, released_at, image, added_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO collection_cards (user_id, card_id, name, set_name, released_at, image, added_at, folder)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (user_id, card_id) DO NOTHING`
     );
+
+    // cardFromInput kennt keinen Ordner, der kommt aus den Rohdaten.
+    const ordner = new Map(input.map((roh) => [String(roh?.id ?? ""), cleanFolder(roh?.folder)]));
 
     await env.DB.batch(
       cards.map((card, index) =>
@@ -443,7 +476,8 @@ async function handleMergeCollection(request, env, user) {
           // Absteigende Zeitmarken, damit die Reihenfolge aus dem
           // Browser erhalten bleibt. Bei identischen Werten waere die
           // Sortierung sonst zufaellig.
-          card.added_at || new Date(now - index * 1000).toISOString()
+          card.added_at || new Date(now - index * 1000).toISOString(),
+          ordner.get(card.id) ?? null
         )
       )
     );
@@ -492,6 +526,7 @@ function deckFromRow(row, cardCount = 0) {
         }
       : null,
     cardCount: total,
+    folder: row.folder || "",
     isPublic: Boolean(row.is_public),
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -649,6 +684,8 @@ async function handleListPublicDecks(env) {
   return json({
     decks: decks.map((row) => ({
       ...deckFromRow(row, row.card_count),
+      // Wie jemand seine Decks ordnet, geht andere nichts an.
+      folder: "",
       owner: row.owner_name,
       cards: nachDeck.get(row.id) || []
     }))
@@ -684,7 +721,7 @@ async function handleGetPublicDeck(env, deckId) {
   const cards = (results || []).map(deckCardFromRow);
   const total = cards.reduce((sum, card) => sum + card.quantity, 0);
 
-  return json({ deck: { ...deckFromRow(deck, total), owner: deck.owner_name }, cards });
+  return json({ deck: { ...deckFromRow(deck, total), folder: "", owner: deck.owner_name }, cards });
 }
 
 async function handleUpdateDeck(request, env, user, deckId) {
@@ -750,6 +787,12 @@ async function handleUpdateDeck(request, env, user, deckId) {
   if (body.isPublic !== undefined) {
     updates.push("is_public = ?");
     values.push(body.isPublic ? 1 : 0);
+  }
+
+  // Ordner: ein Pfad legt das Deck dorthin, leer nimmt es heraus.
+  if (body.folder !== undefined) {
+    updates.push("folder = ?");
+    values.push(cleanFolder(body.folder));
   }
 
   if (!updates.length) {
@@ -974,6 +1017,12 @@ async function handleMergeDecks(request, env, user) {
         stamp
       )
       .run();
+
+    // Lag das Deck im Browser in einem Ordner, zieht der mit um.
+    const ordner = cleanFolder(raw?.folder);
+    if (ordner) {
+      await env.DB.prepare("UPDATE decks SET folder = ? WHERE id = ?").bind(ordner, deckId).run();
+    }
 
     // cardFromInput kennt keine Menge, die muss aus den Rohdaten kommen.
     const cards = (Array.isArray(raw?.cards) ? raw.cards : [])
